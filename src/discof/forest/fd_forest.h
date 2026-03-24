@@ -726,7 +726,7 @@ fd_forest_query( fd_forest_t * forest, ulong slot );
    slot >= forest->root.  blk_insert can also be called to create a
    sentinel block, i.e. a placeholder block that we know exists but
    don't know the parent slot of.  The caller should pass in parent_slot
-   equal to the slot.  In this case, the block inserted will remain an
+   == ULONG_MAX.  In this case, the block inserted will remain an
    orphan/subtree at least until the next blk_insert is called with a
    different parent_slot, after which point no more updates to the
    parent_slot will be allowed.  For non-sentinel blocks, blk insert is
@@ -747,10 +747,16 @@ fd_forest_blk_insert( fd_forest_t * forest, ulong slot, ulong parent_slot, ulong
 #define SHRED_SRC_REPAIR    1
 #define SHRED_SRC_RECOVERED 2
 
-/* fd_forest_shred_insert inserts a new shred into the forest.
-   Assumes slot is already in forest, and should typically be called
-   directly after fd_forest_block_insert. Returns the forest ele
-   corresponding to the shred slot. */
+/* fd_forest_shred_insert inserts a new shred into the forest. Assumes
+   slot is already in forest, and should typically be preceded by a
+   fd_forest_blk_insert. Returns the forest ele corresponding to the
+   shred slot if the shred is accepted, and NULL if the shred is
+   rejected.  A shred can only be rejected if slot is able to verify
+   that this shred does not belong to the canonical FEC set.
+
+   A possible side effect of data_shred_insert is that it may update
+   the parent slot of the block IF the inserted shred has a verifiably
+   correct merkle root. */
 
 fd_forest_blk_t *
 fd_forest_data_shred_insert( fd_forest_t * forest,
@@ -803,14 +809,18 @@ fd_forest_fec_insert( fd_forest_t * forest,
 void
 fd_forest_fec_clear( fd_forest_t * forest, ulong slot, uint fec_set_idx, uint max_shred_idx );
 
-/* fd_forest_fec_chain_verify verifies the chain of merkle roots for a given block.
-   Returns a pointer to the first slot that does not confirm, or NULL if the chain is valid. */
+/* fd_forest_fec_chain_verify verifies the chain of merkle roots for a
+   given block. Should only be called on a block that has all the shreds
+   received. Returns a pointer to the first slot that does not confirm,
+   or NULL if the chain is valid. */
 fd_forest_blk_t *
 fd_forest_fec_chain_verify( fd_forest_t * forest, fd_forest_blk_t * ele, fd_hash_t const * mr );
 
 void
 fd_forest_confirm( fd_forest_t * forest, fd_forest_blk_t * ele, fd_hash_t const * bid );
 
+/* fd_forest_merkle_last_incorrect_idx returns the highest incorrect FEC
+   index for a given block. */
 static inline uint
 fd_forest_merkle_last_incorrect_idx( fd_forest_blk_t * ele ) {
   ulong first_verified_fec = ele->lowest_verified_fec;

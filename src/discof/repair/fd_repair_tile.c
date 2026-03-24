@@ -834,7 +834,7 @@ after_fec( ctx_t      * ctx,
   }
 
   /* re-trigger continuation of chained merkle verification if this FEC
-     set enables it */
+     set enables it  TODOOO MOVE TO AFTER_SHRED? */
   if( FD_UNLIKELY( ele->lowest_verified_fec == (shred->fec_set_idx / 32UL) + 1 ) &&
                    ele->buffered_idx == ele->complete_idx ) {
     check_confirmed( ctx, ele, &ele->confirmed_bid /* if lowest_verified_fec is not UINT_MAX, confirmed_bid must be populated */ );
@@ -953,7 +953,7 @@ after_frag( ctx_t *             ctx,
             /* If we receive a confirmation for a slot we don't have,
                create a sentinel forest block that we can repair from. */
             ulong evicted = ULONG_MAX;
-            blk = fd_forest_blk_insert( ctx->forest, msg->slot, msg->slot, &evicted );
+            blk = fd_forest_blk_insert( ctx->forest, msg->slot, ULONG_MAX, &evicted );
             if( FD_UNLIKELY( !blk_insert_check( ctx, blk, msg->slot, evicted ) ) ) break;
           }
 

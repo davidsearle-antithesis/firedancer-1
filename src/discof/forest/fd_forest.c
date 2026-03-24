@@ -515,18 +515,14 @@ fd_forest_query( fd_forest_t * forest, ulong slot ) {
   return query( forest, slot );
 }
 
-static ulong
-clear_leaf( fd_forest_t * forest, ulong slot ) {
-  VER_INC;
-
+static void
+remove_and_unlink( fd_forest_t * forest, fd_forest_blk_t * blk ) {
   fd_forest_blk_t      * pool     = fd_forest_pool( forest );
   fd_forest_orphaned_t * orphaned = fd_forest_orphaned( forest );
   fd_forest_frontier_t * frontier = fd_forest_frontier( forest );
   fd_forest_ancestry_t * ancestry = fd_forest_ancestry( forest );
   fd_forest_consumed_t * consumed = fd_forest_consumed( forest );
   fd_forest_ref_t *      conspool = fd_forest_conspool( forest );
-  fd_forest_blk_t * blk  = query( forest, slot );
-  FD_TEST( blk );
 
   /* Clean up the parent, and remove block from the maps */
   int is_orphan_req = 1;
@@ -559,7 +555,7 @@ clear_leaf( fd_forest_t * forest, ulong slot ) {
       removed = ancestry_frontier_remove( forest, blk->slot ); FD_TEST( removed );
 
       /* We removed from the main tree, so we possible need to insert parent into the frontier.
-         Only need to add parent to the frontier if it doesn't have any other children. */
+          Only need to add parent to the frontier if it doesn't have any other children. */
 
       if( parent->child == fd_forest_pool_idx_null( pool ) ) {
         parent = fd_forest_ancestry_ele_remove( ancestry, &blk->parent_slot, NULL, pool );
@@ -584,6 +580,17 @@ clear_leaf( fd_forest_t * forest, ulong slot ) {
   consumed_remove( forest, fd_forest_pool_idx( pool, blk ) );
   if( is_orphan_req ) requests_remove( forest, fd_forest_orphreqs( forest ), fd_forest_orphlist( forest ), &forest->orphiter, fd_forest_pool_idx( pool, blk ) );
   else                requests_remove( forest, fd_forest_requests( forest ), fd_forest_reqslist( forest ), &forest->iter,     fd_forest_pool_idx( pool, blk ) );
+}
+
+static ulong
+clear_leaf( fd_forest_t * forest, ulong slot ) {
+  VER_INC;
+
+  fd_forest_blk_t * pool = fd_forest_pool( forest );
+  fd_forest_blk_t * blk  = query( forest, slot );
+  FD_TEST( blk );
+
+  remove_and_unlink( forest, blk );
   fd_forest_pool_ele_release( pool, blk );
 
   return slot;
@@ -930,10 +937,12 @@ fd_forest_blk_insert( fd_forest_t * forest, ulong slot, ulong parent_slot, ulong
 
   fd_forest_blk_t * ele = query( forest, slot );
   if( FD_LIKELY( ele ) ) {
-    /* potentially may need to update the parent_slot, if this
+    /* May need to update the parent_slot, if this
        this was a sentinel block that was created for a confirmed msg.
-       This update is only allowed once */
-    if( FD_UNLIKELY( ele->slot == ele->parent_slot && ele->parent_slot != parent_slot ) ) {
+       A parent update for a sentinel block only occurs once.  This
+       is separate from the parent update for a confirmed equivocating
+       block. */
+    if( FD_UNLIKELY( ele->parent_slot == ULONG_MAX && parent_slot != ULONG_MAX ) ) {
       ele->parent_slot = parent_slot;
       FD_TEST( fd_forest_subtrees_ele_query( subtrees, &slot, NULL, pool ) || fd_forest_orphaned_ele_query( orphaned, &slot, NULL, pool ) );
       subtrees_orphaned_remove( forest, slot ); // if this is a sentinel block, then it must be orphaned
@@ -1049,6 +1058,72 @@ fd_forest_blk_insert( fd_forest_t * forest, ulong slot, ulong parent_slot, ulong
   return ele;
 }
 
+/* Updates the parent slot of a block, and updates the map state for the
+   old parent, new parent, and children of the block.  If the block has
+   children, the children are "moved" with the block to the new fork.
+   incredibly annoying. */
+static void
+parent_update( fd_forest_t * forest, fd_forest_blk_t * ele, ulong parent_slot ) {
+  fd_forest_blk_t *      pool     = fd_forest_pool( forest );
+  fd_forest_ancestry_t * ancestry = fd_forest_ancestry( forest );
+  fd_forest_subtrees_t * subtrees = fd_forest_subtrees( forest );
+  fd_forest_frontier_t * frontier = fd_forest_frontier( forest );
+  fd_forest_orphaned_t * orphaned = fd_forest_orphaned( forest );
+
+  /* remove from maps, unlink from old parent. children subtree still in maps */
+  fd_forest_blk_t * new_parent = fd_forest_query( forest, parent_slot );
+  remove_and_unlink( forest, ele );
+
+  /* insert ele to correct map */
+  if( FD_UNLIKELY( fd_forest_frontier_ele_remove( frontier, &parent_slot, NULL, pool ) ) ) {
+    fd_forest_ancestry_ele_insert( ancestry, new_parent, pool );
+    if( ele->child != ULONG_MAX ) fd_forest_ancestry_ele_insert( ancestry, ele, pool );
+    else                          fd_forest_frontier_ele_insert( frontier, ele, pool );
+  } else if( FD_LIKELY( fd_forest_ancestry_ele_query( ancestry, &parent_slot, NULL, pool ) ) ) {
+    if( ele->child != ULONG_MAX ) fd_forest_ancestry_ele_insert( ancestry, ele, pool );
+    else                          fd_forest_frontier_ele_insert( frontier, ele, pool );
+  } else if( FD_UNLIKELY( fd_forest_orphaned_ele_query( orphaned, &parent_slot, NULL, pool ) ||
+                          fd_forest_subtrees_ele_query( subtrees, &parent_slot, NULL, pool ) ) ) {
+    fd_forest_orphaned_ele_insert( orphaned, ele, pool );
+  } else {
+    ele->parent = fd_forest_pool_idx_null( pool );
+    fd_forest_subtrees_ele_insert( subtrees, ele, pool );
+    fd_forest_subtlist_ele_push_tail( fd_forest_subtlist( forest ), ele, pool );
+    requests_insert( forest, fd_forest_orphreqs( forest ), fd_forest_orphlist( forest ), fd_forest_pool_idx( pool, ele ) );
+  }
+
+  if( FD_LIKELY( new_parent ) ) {
+    ele->parent      = fd_forest_pool_idx( pool, new_parent );
+    ele->parent_slot = parent_slot; /* update parent slot */
+    link( forest, new_parent, ele );
+  }
+
+  /* At this point, ele, old_parent/new_parent are in correct state.
+     Now bfs starting at ele and insert ele's children into correct map */
+
+  ulong * queue = fd_forest_deque( forest );
+  fd_forest_deque_push_tail( queue, fd_forest_pool_idx( pool, ele ) );
+  while( FD_LIKELY( fd_forest_deque_cnt( queue ) ) ) {
+    fd_forest_blk_t * head = fd_forest_pool_ele( pool, fd_forest_deque_pop_head( queue ) );
+    fd_forest_blk_t * child = fd_forest_pool_ele( pool, head->child );
+    while( FD_LIKELY( child ) ) {
+      subtrees_orphaned_remove( forest, child->slot ); /* remove child from all maps */
+      ancestry_frontier_remove( forest, child->slot );
+      fd_forest_deque_push_tail( queue, fd_forest_pool_idx( pool, child ) );
+      child = fd_forest_pool_ele( pool, child->sibling );
+    }
+    if( FD_UNLIKELY( head==ele ) ) continue;
+    /* insert child */
+    if( FD_LIKELY( fd_forest_ancestry_ele_query( ancestry, &head->parent_slot, NULL, pool ) ) ) {
+      if( head->child != ULONG_MAX ) fd_forest_ancestry_ele_insert( ancestry, head, pool );
+      else                           fd_forest_frontier_ele_insert( frontier, head, pool );
+    } else {
+      fd_forest_orphaned_ele_insert( orphaned, head, pool );
+    }
+  }
+  ele->parent_slot = parent_slot;
+}
+
 static inline int
 merkle_recvd( fd_forest_blk_t * ele, uint fec_idx ) {
   return memcmp( &ele->merkle_roots[fec_idx].mr, &empty_mr, sizeof(fd_hash_t) ) != 0;
@@ -1098,6 +1173,18 @@ fd_forest_data_shred_insert( fd_forest_t * forest,
     } else {
       ele->merkle_roots[fec_idx].mr = *mr;
       ele->merkle_roots[fec_idx].cmr = *cmr;
+
+      /* A validated mr, but the parent slot is wrong.  This means we
+         initially received a the wrong version of the slot that also
+         had a different parent slot.  We need to update the parent slot
+         to the correct one.  We can _probably_ get away with not doing
+         this update (it wouldn't cause the validator to halt), but for
+         the sake of correctness, we'll do it.  It is theoretically only
+         possible for the parent_slot update to happen once, after
+         the fec_chain_verify has identified an incorrect FEC. */
+      if( FD_UNLIKELY( ele->parent_slot != parent_slot ) ) {
+        parent_update( forest, ele, parent_slot );
+      }
     }
   }
   else { /* No verification / knowledge of canonical merkle root */
@@ -1166,16 +1253,12 @@ fd_forest_fec_insert( fd_forest_t * forest, ulong slot, ulong parent_slot, uint 
        (2) the second case is that we get two FEC completion msgs:
            one for both version B and A. They get completed, one after
            the other. In this case we've first overwritten from { 0 } to
-           B.  But when version A arrives, what should we do? If A is
-           the correct version but we ignore it, when we chain verify
-           down the line, we'll evict B and try to repair for A, but
-           fec_resolver is not going to let it through! Vice versa if B
+           B.  But if version A arrives, what should we do?  If B
            is the correct version, but we choose to overwrite the fec
-           when A arrive. No way around it (unless) we ask shred to
-           re-deliver the FEC set. In practice, we'll likely still
-           progress because reasm will have information about both B and
-           A, but if reasm has evicted it. (unlikely, but possible),
-           then we'll stall. */
+           when A arrive, then we need to ask ask shred to
+           re-deliver the FEC set.  Since we don't know at this time if
+           B or A is correct, we optimize for case 1, and overwrite the
+           merkle root with the new one. */
     // overwrite the merkle root with the new one
     ele->merkle_roots[fec_idx].mr  = *mr;
     ele->merkle_roots[fec_idx].cmr = *cmr;
@@ -1278,8 +1361,12 @@ fd_forest_fec_clear( fd_forest_t * forest, ulong slot, uint fec_set_idx, uint ma
      iterator's next_shred_idx, then the iterator will pop the slot as
      "done" (next_shred_idx > complete_idx) without ever rerequesting
      this fec. We must mark the slot incomplete so that the iterator can
-     re-request everything. */
-  ele->complete_idx = UINT_MAX;
+     re-request everything.  Don't particularly care about the clear of
+     orphan slots as they are guaranteed to be iterated again. */
+
+  if( FD_UNLIKELY( forest->iter.ele_idx == fd_forest_pool_idx( fd_forest_pool( forest ), ele ) ) ) {
+    forest->iter.shred_idx = UINT_MAX;
+  }
 
   if( FD_UNLIKELY( fec_set_idx == 0 ) ) ele->buffered_idx = UINT_MAX;
   else                                  ele->buffered_idx = fd_uint_if( ele->buffered_idx != UINT_MAX, fd_uint_min( ele->buffered_idx, fec_set_idx - 1 ), UINT_MAX );
