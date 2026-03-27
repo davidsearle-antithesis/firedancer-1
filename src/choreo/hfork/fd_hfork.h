@@ -69,7 +69,6 @@
    running on the forked chain. */
 
 #include "../fd_choreo_base.h"
-#include "../tower/fd_tower_voters.h"
 
 struct fd_hfork;
 typedef struct fd_hfork fd_hfork_t;
@@ -174,13 +173,16 @@ fd_hfork_record_our_bank_hash( fd_hfork_t *      hfork,
                                ulong             total_stake );
 
 /* fd_hfork_update_voters updates the set of voters tracked by the hard
-   fork detector.  Voters not in tower_voters are removed along with all
-   their vote entries.  New voters are added.  This should be called on
-   each epoch boundary when the stake-weighted voter set changes. */
+   fork detector.  Voters not in vote_accs[0..cnt) are removed along
+   with all their vote entries.  New voters are added.  This should be
+   called on each epoch boundary when the stake-weighted voter set
+   changes.  vote_accs is an array of vote account addresses of length
+   cnt. */
 
 void
-fd_hfork_update_voters( fd_hfork_t *              hfork,
-                        fd_tower_voters_t const * tower_voters );
+fd_hfork_update_voters( fd_hfork_t *        hfork,
+                        fd_pubkey_t const * vote_accs,
+                        ulong               cnt );
 
 FD_PROTOTYPES_END
 
