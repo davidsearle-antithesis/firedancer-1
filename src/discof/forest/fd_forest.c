@@ -515,6 +515,9 @@ fd_forest_query( fd_forest_t * forest, ulong slot ) {
   return query( forest, slot );
 }
 
+/* remove_and_unlink removes a block from the forest and unlinks it from
+   its parent.  Also removes from sibling chain, consumed map, and
+   requests map if needed.  Does NOT release the block from the pool. */
 static void
 remove_and_unlink( fd_forest_t * forest, fd_forest_blk_t * blk ) {
   fd_forest_blk_t      * pool     = fd_forest_pool( forest );
@@ -546,6 +549,7 @@ remove_and_unlink( fd_forest_t * forest, fd_forest_blk_t * blk ) {
         sibling = fd_forest_pool_ele( pool, sibling->sibling );
       }
     }
+    blk->sibling = fd_forest_pool_idx_null( pool );
 
     /* remove the block itself from the maps */
 
@@ -1062,66 +1066,60 @@ fd_forest_blk_insert( fd_forest_t * forest, ulong slot, ulong parent_slot, ulong
    old parent, new parent, and children of the block.  If the block has
    children, the children are "moved" with the block to the new fork.
    incredibly annoying. */
-static void
-parent_update( fd_forest_t * forest, fd_forest_blk_t * ele, ulong parent_slot ) {
+static fd_forest_blk_t *
+verified_parent_update( fd_forest_t * forest, fd_forest_blk_t * ele, ulong parent_slot ) {
   fd_forest_blk_t *      pool     = fd_forest_pool( forest );
-  fd_forest_ancestry_t * ancestry = fd_forest_ancestry( forest );
   fd_forest_subtrees_t * subtrees = fd_forest_subtrees( forest );
-  fd_forest_frontier_t * frontier = fd_forest_frontier( forest );
   fd_forest_orphaned_t * orphaned = fd_forest_orphaned( forest );
 
   /* remove from maps, unlink from old parent. children subtree still in maps */
-  fd_forest_blk_t * new_parent = fd_forest_query( forest, parent_slot );
   remove_and_unlink( forest, ele );
 
-  /* insert ele to correct map */
-  if( FD_UNLIKELY( fd_forest_frontier_ele_remove( frontier, &parent_slot, NULL, pool ) ) ) {
-    fd_forest_ancestry_ele_insert( ancestry, new_parent, pool );
-    if( ele->child != ULONG_MAX ) fd_forest_ancestry_ele_insert( ancestry, ele, pool );
-    else                          fd_forest_frontier_ele_insert( frontier, ele, pool );
-  } else if( FD_LIKELY( fd_forest_ancestry_ele_query( ancestry, &parent_slot, NULL, pool ) ) ) {
-    if( ele->child != ULONG_MAX ) fd_forest_ancestry_ele_insert( ancestry, ele, pool );
-    else                          fd_forest_frontier_ele_insert( frontier, ele, pool );
-  } else if( FD_UNLIKELY( fd_forest_orphaned_ele_query( orphaned, &parent_slot, NULL, pool ) ||
-                          fd_forest_subtrees_ele_query( subtrees, &parent_slot, NULL, pool ) ) ) {
-    fd_forest_orphaned_ele_insert( orphaned, ele, pool );
-  } else {
-    ele->parent = fd_forest_pool_idx_null( pool );
-    fd_forest_subtrees_ele_insert( subtrees, ele, pool );
-    fd_forest_subtlist_ele_push_tail( fd_forest_subtlist( forest ), ele, pool );
-    requests_insert( forest, fd_forest_orphreqs( forest ), fd_forest_orphlist( forest ), fd_forest_pool_idx( pool, ele ) );
+  /* the only info that is verified and should be saved is the confirmed
+     bid, and verified status if the confirmed bid already exists. */
+  fd_hash_t confirmed_bid       = ele->confirmed_bid;       /* save confirmation status for later */
+  uint      lowest_verified_fec = ele->lowest_verified_fec; /* save lowest verified fec for later */
+  uchar     merkle_roots[ sizeof(ele->merkle_roots) ]; /* save merkle roots for later. size is 2x because we need to save the mr and cmr */
+  if( FD_LIKELY( lowest_verified_fec != UINT_MAX ) ) {
+    memcpy( merkle_roots, ele->merkle_roots, sizeof(ele->merkle_roots) );
   }
 
-  if( FD_LIKELY( new_parent ) ) {
-    ele->parent      = fd_forest_pool_idx( pool, new_parent );
-    ele->parent_slot = parent_slot; /* update parent slot */
-    link( forest, new_parent, ele );
-  }
-
-  /* At this point, ele, old_parent/new_parent are in correct state.
-     Now bfs starting at ele and insert ele's children into correct map */
-
+  /* orphan/subtree all the children of ele */
   ulong * queue = fd_forest_deque( forest );
   fd_forest_deque_push_tail( queue, fd_forest_pool_idx( pool, ele ) );
+
   while( FD_LIKELY( fd_forest_deque_cnt( queue ) ) ) {
-    fd_forest_blk_t * head = fd_forest_pool_ele( pool, fd_forest_deque_pop_head( queue ) );
-    fd_forest_blk_t * child = fd_forest_pool_ele( pool, head->child );
+    fd_forest_blk_t * blk = fd_forest_pool_ele( pool, fd_forest_deque_pop_head( queue ) );
+    fd_forest_blk_t * child = fd_forest_pool_ele( pool, blk->child );
     while( FD_LIKELY( child ) ) {
-      subtrees_orphaned_remove( forest, child->slot ); /* remove child from all maps */
       ancestry_frontier_remove( forest, child->slot );
+      subtrees_orphaned_remove( forest, child->slot );
+
       fd_forest_deque_push_tail( queue, fd_forest_pool_idx( pool, child ) );
       child = fd_forest_pool_ele( pool, child->sibling );
     }
-    if( FD_UNLIKELY( head==ele ) ) continue;
-    /* insert child */
-    if( FD_LIKELY( fd_forest_ancestry_ele_query( ancestry, &head->parent_slot, NULL, pool ) ) ) {
-      if( head->child != ULONG_MAX ) fd_forest_ancestry_ele_insert( ancestry, head, pool );
-      else                           fd_forest_frontier_ele_insert( frontier, head, pool );
+    if( FD_UNLIKELY( blk == ele ) ) continue;
+    if( FD_UNLIKELY( fd_forest_pool_ele( pool, blk->parent ) == ele ) ) {
+      blk->parent = fd_forest_pool_idx_null( pool );
+      fd_forest_subtrees_ele_insert( subtrees, blk, pool );
+      fd_forest_subtlist_ele_push_tail( fd_forest_subtlist( forest ), blk, pool );
+      requests_insert( forest, fd_forest_orphreqs( forest ), fd_forest_orphlist( forest ), fd_forest_pool_idx( pool, blk ) );
     } else {
-      fd_forest_orphaned_ele_insert( orphaned, head, pool );
+      fd_forest_orphaned_ele_insert( orphaned, blk, pool );
     }
   }
-  ele->parent_slot = parent_slot;
+  ulong slot = ele->slot;
+  fd_forest_pool_ele_release( pool, ele );
+
+  /* ele is now gone. blk_insert it! and then restore saved verified state */
+
+  fd_forest_blk_t * new_ele = fd_forest_blk_insert( forest, slot, parent_slot, NULL );
+  new_ele->lowest_verified_fec = lowest_verified_fec;
+  if( FD_UNLIKELY( lowest_verified_fec != UINT_MAX ) ) {
+    new_ele->confirmed_bid = confirmed_bid;
+    memcpy( new_ele->merkle_roots, merkle_roots, sizeof(merkle_roots) );
+  }
+  return new_ele;
 }
 
 static inline int
@@ -1171,9 +1169,6 @@ fd_forest_data_shred_insert( fd_forest_t * forest,
       /* merkle root doesn't match the verified CMR  */
       return NULL; /* do not accept this shred. */
     } else {
-      ele->merkle_roots[fec_idx].mr = *mr;
-      ele->merkle_roots[fec_idx].cmr = *cmr;
-
       /* A validated mr, but the parent slot is wrong.  This means we
          initially received a the wrong version of the slot that also
          had a different parent slot.  We need to update the parent slot
@@ -1182,9 +1177,10 @@ fd_forest_data_shred_insert( fd_forest_t * forest,
          the sake of correctness, we'll do it.  It is theoretically only
          possible for the parent_slot update to happen once, after
          the fec_chain_verify has identified an incorrect FEC. */
-      if( FD_UNLIKELY( ele->parent_slot != parent_slot ) ) {
-        parent_update( forest, ele, parent_slot );
-      }
+      if( FD_UNLIKELY( ele->parent_slot != parent_slot ) ) ele = verified_parent_update( forest, ele, parent_slot );
+      ele->merkle_roots[fec_idx].mr = *mr;
+      ele->merkle_roots[fec_idx].cmr = *cmr;
+
     }
   }
   else { /* No verification / knowledge of canonical merkle root */

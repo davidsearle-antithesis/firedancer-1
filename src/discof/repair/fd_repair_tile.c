@@ -834,7 +834,7 @@ after_fec( ctx_t      * ctx,
   }
 
   /* re-trigger continuation of chained merkle verification if this FEC
-     set enables it  TODOOO MOVE TO AFTER_SHRED? */
+     set enables it  TODO MOVE TO AFTER_SHRED? */
   if( FD_UNLIKELY( ele->lowest_verified_fec == (shred->fec_set_idx / 32UL) + 1 ) &&
                    ele->buffered_idx == ele->complete_idx ) {
     check_confirmed( ctx, ele, &ele->confirmed_bid /* if lowest_verified_fec is not UINT_MAX, confirmed_bid must be populated */ );

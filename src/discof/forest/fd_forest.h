@@ -754,9 +754,14 @@ fd_forest_blk_insert( fd_forest_t * forest, ulong slot, ulong parent_slot, ulong
    rejected.  A shred can only be rejected if slot is able to verify
    that this shred does not belong to the canonical FEC set.
 
-   A possible side effect of data_shred_insert is that it may update
-   the parent slot of the block IF the inserted shred has a verifiably
-   correct merkle root. */
+   A possible side effect of data_shred_insert is that it may update the
+   parent slot of the block IF the inserted shred has a verifiably
+   correct merkle root.  Note this is different from a sentinel block
+   parent update. A data shred insert can only update the parent slot if
+   the data shred has a verified merkle root, and the parent slot is
+   incorrect.  A sentinel block will update it's parent with the first
+   parent slot it receives, but it can be later updated with a
+   data_shred_insert.  Each update type can only be performed once. */
 
 fd_forest_blk_t *
 fd_forest_data_shred_insert( fd_forest_t * forest,
@@ -770,7 +775,6 @@ fd_forest_data_shred_insert( fd_forest_t * forest,
                              fd_hash_t *   mr,
                              fd_hash_t *   cmr );
 
-/* TODO: Does merkle validation need to happen for coding shreds as well*/
 fd_forest_blk_t *
 fd_forest_code_shred_insert( fd_forest_t * forest, ulong slot, uint shred_idx );
 
