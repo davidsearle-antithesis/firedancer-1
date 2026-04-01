@@ -100,7 +100,7 @@
    MAX_AUTHORIZED_VOTERS_CAPACITY.  Validated by
    test_authorized_voters_footprint in test_vote_program. */
 #define FD_AUTHORIZED_VOTERS_POOL_ALIGN      (128UL)
-#define FD_AUTHORIZED_VOTERS_POOL_FOOTPRINT  (640UL)
+#define FD_AUTHORIZED_VOTERS_POOL_FOOTPRINT  (512UL)
 #define FD_AUTHORIZED_VOTERS_TREAP_ALIGN     (8UL)
 #define FD_AUTHORIZED_VOTERS_TREAP_FOOTPRINT (24UL)
 
@@ -132,11 +132,12 @@ struct fd_vote_authorized_voter {
   ulong       epoch;
   fd_pubkey_t pubkey;
 
-  /* Treap-specific fields */
-  ulong       parent;
-  ulong       left;
-  ulong       right;
-  ulong       prio;
+  /* Treap/pool index fields.  uchar is sufficient because the max
+     authorized voters capacity is MAX_AUTHORIZED_VOTERS_CAPACITY (6). */
+  uchar       parent;
+  uchar       left;
+  uchar       right;
+  uchar       prio;
 };
 typedef struct fd_vote_authorized_voter fd_vote_authorized_voter_t;
 #define FD_VOTE_AUTHORIZED_VOTER_ALIGN alignof(fd_vote_authorized_voter_t)
@@ -283,10 +284,12 @@ FD_STATIC_ASSERT( sizeof(fd_vote_init_t)==97UL, vote_init_layout );
 
 #define POOL_NAME fd_vote_authorized_voters_pool
 #define POOL_T fd_vote_authorized_voter_t
+#define POOL_IDX_T uchar
 #define POOL_NEXT parent
 #include "../../../../util/tmpl/fd_pool.c"
 #define TREAP_NAME fd_vote_authorized_voters_treap
 #define TREAP_T fd_vote_authorized_voter_t
+#define TREAP_IDX_T uchar
 #define TREAP_QUERY_T ulong
 #define TREAP_CMP(q,e) ( (q == (e)->epoch) ? 0 : ( (q < (e)->epoch) ? -1 : 1 ) )
 #define TREAP_LT(e0,e1) ((e0)->epoch<(e1)->epoch)

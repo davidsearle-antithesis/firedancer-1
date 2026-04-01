@@ -130,7 +130,7 @@ add_vote_account( test_env_t *        env,
   fd_memset( voter, 0, sizeof(fd_vote_authorized_voter_t) );
   voter->epoch  = 0UL;
   voter->pubkey = *node_pubkey;
-  voter->prio   = node_pubkey->ul[0];
+  voter->prio   = node_pubkey->uc[0];
   fd_vote_authorized_voters_treap_ele_insert( vote_state->authorized_voters.treap, voter, vote_state->authorized_voters.pool );
 
   FD_TEST( !fd_vote_state_versioned_serialize( versioned, vote_state_data, sizeof(vote_state_data) ) );

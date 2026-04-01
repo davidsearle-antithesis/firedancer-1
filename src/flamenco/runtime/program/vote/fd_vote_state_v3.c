@@ -42,7 +42,7 @@ fd_vote_program_v3_create_new( fd_vote_init_t * const        vote_init,
   fd_vote_authorized_voter_t * voter = fd_vote_authorized_voters_pool_ele_acquire( vote_state->authorized_voters.pool );
   voter->epoch  = clock->epoch;
   voter->pubkey = vote_init->authorized_voter;
-  voter->prio   = (ulong)&voter->pubkey;
+  voter->prio   = voter->pubkey.uc[0];
   fd_vote_authorized_voters_treap_ele_insert( vote_state->authorized_voters.treap, voter, vote_state->authorized_voters.pool );
 }
 
@@ -191,7 +191,7 @@ fd_vote_state_v3_set_new_authorized_voter( fd_exec_instr_ctx_t * ctx,
       fd_vote_authorized_voters_pool_ele_acquire( self->authorized_voters.pool );
   ele->epoch  = target_epoch;
   ele->pubkey = *authorized_pubkey;
-  ele->prio   = (ulong)&ele->pubkey;
+  ele->prio   = ele->pubkey.uc[0];
   fd_vote_authorized_voters_treap_ele_insert(
       self->authorized_voters.treap, ele, self->authorized_voters.pool );
 

@@ -233,7 +233,7 @@ deser_authorized_voters( fd_vote_authorized_voter_t *        pool,
     fd_vote_authorized_voter_t * voter = fd_vote_authorized_voters_pool_ele_acquire( pool );
     READ_U64( voter->epoch, ptr, rem );
     READ_PUBKEY( voter->pubkey, ptr, rem );
-    voter->prio = (ulong)&voter->pubkey;
+    voter->prio = voter->pubkey.uc[0];
 
     /* Check for existing entries, overwrite if exists */
     fd_vote_authorized_voter_t * existing_voter = fd_vote_authorized_voters_treap_ele_query( treap, voter->epoch, pool );

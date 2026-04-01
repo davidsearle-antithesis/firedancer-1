@@ -133,7 +133,7 @@ genesis_create( void *                       buf,
     *voter = (fd_vote_authorized_voter_t) {
       .epoch  = 0UL,
       .pubkey = options->identity_pubkey,
-      .prio   = options->identity_pubkey.ul[0],  /* treap prio */
+      .prio   = options->identity_pubkey.uc[0],
     };
     fd_vote_authorized_voters_treap_ele_insert( vote_state->authorized_voters.treap, voter, vote_state->authorized_voters.pool );
 

@@ -12,7 +12,7 @@ init_authorized_voters( fd_vote_authorized_voters_t * authorized_voters,
   fd_vote_authorized_voter_t * voter = fd_vote_authorized_voters_pool_ele_acquire( authorized_voters->pool );
   voter->epoch  = epoch;
   voter->pubkey = *authorized_voter;
-  voter->prio   = (ulong)&voter->pubkey;
+  voter->prio   = voter->pubkey.uc[0];
   fd_vote_authorized_voters_treap_ele_insert( authorized_voters->treap, voter, authorized_voters->pool );
 }
 
@@ -141,7 +141,7 @@ fd_vote_state_v4_set_new_authorized_voter( fd_exec_instr_ctx_t * ctx,
       fd_vote_authorized_voters_pool_ele_acquire( self->authorized_voters.pool );
   ele->epoch  = target_epoch;
   ele->pubkey = *authorized_pubkey;
-  ele->prio   = (ulong)&ele->pubkey;
+  ele->prio   = ele->pubkey.uc[0];
   fd_vote_authorized_voters_treap_ele_insert(
       self->authorized_voters.treap, ele, self->authorized_voters.pool );
 

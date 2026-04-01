@@ -291,7 +291,7 @@ fd_svm_mini_init_mock_validators( fd_svm_mini_t *              mini,
       *ele = (fd_vote_authorized_voter_t){
         .epoch  = 0UL,
         .pubkey = identity_key,
-        .prio   = identity_key.ul[0],
+        .prio   = identity_key.uc[0],
       };
       fd_vote_authorized_voters_treap_ele_insert( vs->authorized_voters.treap, ele, vs->authorized_voters.pool );
       FD_TEST( !fd_vote_state_versioned_serialize( versioned, vote_state_data, sizeof(vote_state_data) ) );

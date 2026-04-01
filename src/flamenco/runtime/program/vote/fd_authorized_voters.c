@@ -96,7 +96,7 @@ fd_authorized_voters_get_and_cache_authorized_voter_for_epoch( fd_vote_authorize
     fd_vote_authorized_voter_t * ele = fd_vote_authorized_voters_pool_ele_acquire( self->pool );
     ele->epoch                       = epoch;
     ele->pubkey                      = res->pubkey;
-    ele->prio                        = (ulong)&ele->pubkey;
+    ele->prio                        = ele->pubkey.uc[0];
     // https://github.com/anza-xyz/agave/blob/v2.0.1/sdk/program/src/vote/authorized_voters.rs#L33
     fd_vote_authorized_voters_treap_ele_insert( self->treap, ele, self->pool );
     return ele;
