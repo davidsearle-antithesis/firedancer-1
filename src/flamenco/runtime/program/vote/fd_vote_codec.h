@@ -3,14 +3,9 @@
 
 #include "../../../types/fd_types_custom.h"
 
-/* Vote codec -- unified types and (de)serializers for vote instructions
-   and vote account state.
+/* Vote program type definitions and (de)serializers.
 
-   This header combines the leaf types shared by both vote account state
-   and vote instruction code, the vote account state types across all
-   supported versions (v1_14_11, v3, v4), and the vote instruction
-   types.  Previously auto-generated from fd_types.json, these are now
-   hand-maintained here with custom (de)serializers. */
+   Supported versions: v1_14_11, v3, v4. */
 
 /**********************************************************************/
 /* Constants -- vote state                                            */
