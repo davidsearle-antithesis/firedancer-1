@@ -938,7 +938,7 @@ after_frag( fd_shred_ctx_t *    ctx,
     if( FD_UNLIKELY( (fd_disco_netmux_sig_proto( sig )==DST_PROTO_REPAIR) & (shred_buffer_sz>=shred_sz+sizeof(uint)) ) ) {
       nonce = FD_LOAD(uint, shred_buffer + shred_sz );
       long est_now_ns = fd_log_wallclock(); /* TODO: switch to fd_clock for performance */
-      int nonce_okay = fd_rnonce_ss_verify( ctx->repair_nonce_ss, nonce, shred->slot, shred->idx, est_now_ns );
+      int  nonce_okay = fd_rnonce_ss_verify( ctx->repair_nonce_ss, nonce, shred->slot, shred->idx, est_now_ns );
       ctx->metrics->bad_nonce += (ulong)(!nonce_okay);
       from_repair = nonce_okay;
     }
@@ -955,8 +955,12 @@ after_frag( fd_shred_ctx_t *    ctx,
       /* We've spilled an in-progress FEC set in the fec_resolver. We
          need to let repair know to clear out it's cached info for that
          fec set and re-repair those shreds. */
-      ulong tspub = fd_frag_meta_ts_comp( fd_tickcount() );
-      fd_stem_publish( stem, ctx->shred_out_idx, SHRED_SIG_FEC_EVICTED, ctx->shred_out_chunk, 0, 0, ctx->tsorig, tspub );
+      fd_shred_evicted_t * evicted_msg = (fd_shred_evicted_t *)fd_type_pun( fd_chunk_to_laddr( ctx->shred_out_mem, ctx->shred_out_chunk ) );
+      evicted_msg->slot        = spilled_fec.slot;
+      evicted_msg->fec_set_idx = spilled_fec.fec_set_idx;
+
+      fd_stem_publish( stem, ctx->shred_out_idx, SHRED_SIG_FEC_EVICTED, ctx->shred_out_chunk, sizeof(fd_shred_evicted_t), 0, ctx->tsorig, fd_frag_meta_ts_comp( fd_tickcount() ) );
+      ctx->shred_out_chunk = fd_dcache_compact_next( ctx->shred_out_chunk, sizeof(fd_shred_evicted_t), ctx->shred_out_chunk0, ctx->shred_out_wmark );
     }
 
     if( (rv==FD_FEC_RESOLVER_SHRED_OKAY) | (rv==FD_FEC_RESOLVER_SHRED_COMPLETES) | (rv==FD_FEC_RESOLVER_SHRED_DUPLICATE) ) {
@@ -981,22 +985,20 @@ after_frag( fd_shred_ctx_t *    ctx,
 
         /* Construct the sig from the shred. */
 
-        ulong _sig = from_repair ? SHRED_SIG_SRC_REPAIR : SHRED_SIG_SRC_TURBINE;
+        ulong _sig = fd_disco_netmux_sig_proto( sig )==DST_PROTO_REPAIR
+                       ? ( from_repair /*nonce_okay*/ ? SHRED_SIG_SRC_REPAIR : SHRED_SIG_SRC_BAD_REPAIR )
+                       : ( SHRED_SIG_SRC_TURBINE );
 
         /* Copy the shred header into the frag and publish. */
 
-        ulong sz = fd_shred_sz( *out_shred );
-        fd_memcpy( fd_chunk_to_laddr( ctx->shred_out_mem, ctx->shred_out_chunk ), *out_shred, sz );
-
-        fd_memcpy( (uchar *)fd_chunk_to_laddr( ctx->shred_out_mem, ctx->shred_out_chunk ) + sz, &ctx->out_merkle_roots[0], FD_SHRED_MERKLE_ROOT_SZ );
-        sz += FD_SHRED_MERKLE_ROOT_SZ;
-
-        FD_STORE(uint, fd_chunk_to_laddr( ctx->shred_out_mem, ctx->shred_out_chunk ) + sz, nonce );
-        sz += 4UL;
+        fd_shred_base_t * shred_msg = (fd_shred_base_t *)fd_chunk_to_laddr( ctx->shred_out_mem, ctx->shred_out_chunk );
+        shred_msg->shred            = **out_shred;
+        memcpy( &shred_msg->merkle_root, ctx->out_merkle_roots[0].hash, sizeof(fd_hash_t) );
+        if( FD_UNLIKELY( from_repair ) ) { shred_msg->rnonce = nonce; }
 
         ulong tspub = fd_frag_meta_ts_comp( fd_tickcount() );
-        fd_stem_publish( stem, ctx->shred_out_idx, _sig, ctx->shred_out_chunk, sz, 0UL, ctx->tsorig, tspub );
-        ctx->shred_out_chunk = fd_dcache_compact_next( ctx->shred_out_chunk, sz, ctx->shred_out_chunk0, ctx->shred_out_wmark );
+        fd_stem_publish( stem, ctx->shred_out_idx, _sig, ctx->shred_out_chunk, sizeof(fd_shred_base_t), 0UL, ctx->tsorig, tspub );
+        ctx->shred_out_chunk = fd_dcache_compact_next( ctx->shred_out_chunk, sizeof(fd_shred_base_t), ctx->shred_out_chunk0, ctx->shred_out_wmark );
       }
     }
     if( FD_LIKELY( rv!=FD_FEC_RESOLVER_SHRED_COMPLETES ) ) return;
@@ -1095,17 +1097,15 @@ after_frag( fd_shred_ctx_t *    ctx,
          completed by the singular coding shred, and that also happens
          to evict a FEC set from the curr_map.  When fix-32 arrives, the
          link burst value can be lowered to 2. */
-
       ulong sig = ctx->in_kind[ in_idx ]==IN_KIND_POH ? SHRED_SIG_FEC_COMPLETE_LEADER : SHRED_SIG_FEC_COMPLETE;
 
-      uchar * chunk = fd_chunk_to_laddr( ctx->shred_out_mem, ctx->shred_out_chunk );
-      memcpy( chunk,                                                        last,                                               FD_SHRED_DATA_HEADER_SZ );
-      memcpy( chunk+FD_SHRED_DATA_HEADER_SZ,                                ctx->out_merkle_roots[fset_k].hash,                 FD_SHRED_MERKLE_ROOT_SZ );
-      memcpy( chunk+FD_SHRED_DATA_HEADER_SZ + FD_SHRED_MERKLE_ROOT_SZ,     (uchar *)last + fd_shred_chain_off( last->variant ), FD_SHRED_MERKLE_ROOT_SZ );
-      ulong sz    = FD_SHRED_DATA_HEADER_SZ + FD_SHRED_MERKLE_ROOT_SZ * 2;
+      fd_shred_complete_t * complete_msg = fd_chunk_to_laddr( ctx->shred_out_mem, ctx->shred_out_chunk );
+      complete_msg->last_shred = *last;
+      memcpy( &complete_msg->merkle_root, ctx->out_merkle_roots[fset_k].hash, sizeof(fd_hash_t) );
+      complete_msg->chained_merkle_root = *(fd_hash_t *)fd_type_pun((uchar *)last + fd_shred_chain_off( last->variant ));
 
-      fd_stem_publish( stem, ctx->shred_out_idx, sig, ctx->shred_out_chunk, sz, 0UL, ctx->tsorig, fd_frag_meta_ts_comp( fd_tickcount() ) );
-      ctx->shred_out_chunk = fd_dcache_compact_next( ctx->shred_out_chunk, sz, ctx->shred_out_chunk0, ctx->shred_out_wmark );
+      fd_stem_publish( stem, ctx->shred_out_idx, sig, ctx->shred_out_chunk, sizeof(fd_shred_complete_t), 0UL, ctx->tsorig, fd_frag_meta_ts_comp( fd_tickcount() ) );
+      ctx->shred_out_chunk = fd_dcache_compact_next( ctx->shred_out_chunk, sizeof(fd_shred_complete_t), ctx->shred_out_chunk0, ctx->shred_out_wmark );
 
     } else if( FD_UNLIKELY( ctx->store_out_idx != ULONG_MAX ) ) { /* frankendancer-only */
 

@@ -739,13 +739,12 @@ after_shred( ctx_t      * ctx,
   /* Insert the shred sig (shared by all shred members in the FEC set)
       into the map. */
   int is_code = fd_shred_is_code( fd_shred_type( shred->variant ) );
-
-  int src = sig==SHRED_SIG_SRC_REPAIR ? SHRED_SRC_REPAIR : SHRED_SRC_TURBINE;
+  int src     = sig==SHRED_SIG_SRC_TURBINE ? SHRED_SRC_TURBINE : SHRED_SRC_REPAIR /* bad or good repair */ ;
 
   if( FD_LIKELY( !is_code ) ) {
     long rtt = 0;
     fd_pubkey_t peer;
-    if( FD_UNLIKELY( sig==SHRED_SIG_SRC_REPAIR && ( rtt = fd_inflights_request_remove( ctx->inflights, nonce, shred->slot, shred->idx, &peer ) ) > 0 ) ) {
+    if( FD_UNLIKELY( src == SHRED_SRC_REPAIR && ( rtt = fd_inflights_request_remove( ctx->inflights, nonce, shred->slot, shred->idx, &peer ) ) > 0 ) ) {
       fd_policy_peer_response_update( ctx->policy, &peer, rtt );
       fd_histf_sample( ctx->metrics->response_latency, (ulong)rtt );
     }
@@ -980,8 +979,8 @@ after_frag( ctx_t *             ctx,
       }
 
       uchar * src = fd_chunk_to_laddr( in_ctx->mem, ctx->chunk );
-      fd_shred_base_t * repair_msg = (fd_shred_base_t *)fd_type_pun( src );
-      fd_shred_t      * shred      = &repair_msg->shred;
+      fd_shred_base_t * shred_msg = (fd_shred_base_t *)fd_type_pun( src );
+      fd_shred_t      * shred     = &shred_msg->shred; /* completes & shred messages all have a shred header as first field */
 
       if( FD_UNLIKELY( shred->slot <= fd_forest_root_slot( ctx->forest ) ) ) {
         FD_LOG_INFO(( "shred %lu %u %u too old, ignoring", shred->slot, shred->idx, shred->fec_set_idx ));
@@ -1014,10 +1013,8 @@ after_frag( ctx_t *             ctx,
         fd_stem_publish( ctx->stem, ctx->repair_out_ctx->idx, sig, ctx->repair_out_ctx->chunk, sz, 0UL, 0UL, tspub );
         ctx->repair_out_ctx->chunk = fd_dcache_compact_next( ctx->repair_out_ctx->chunk, sz, ctx->repair_out_ctx->chunk0, ctx->repair_out_ctx->wmark );
       } else {
-        fd_shred_repair_t * repair_msg = (fd_shred_repair_t *)fd_type_pun( src );
-        fd_shred_t        * shred      = &repair_msg->shred;
-        fd_hash_t         * cmr        = (fd_hash_t *)fd_type_pun(repair_msg->shred_ + fd_shred_chain_off( shred->variant ));
-        after_shred( ctx, sig, shred, repair_msg->nonce, &repair_msg->merkle_root, cmr );
+        fd_hash_t * cmr = (fd_hash_t *)fd_type_pun(shred_msg->shred_ + fd_shred_chain_off( shred->variant ));
+        after_shred( ctx, sig, shred, shred_msg->rnonce, &shred_msg->merkle_root, cmr );
       }
 
       /* update metrics */

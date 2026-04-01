@@ -575,7 +575,9 @@ after_frag( fd_capture_tile_ctx_t * ctx,
     /* This is a fec completes message! we can use it to check how long
        it takes to complete a fec */
 
-    fd_shred_t const * shred = (fd_shred_t *)fd_type_pun( ctx->shred_buffer );
+    fd_shred_complete_t const * completes = (fd_shred_complete_t *)fd_type_pun( ctx->shred_buffer );
+    fd_shred_t const * shred = &completes->last_shred;
+
     uint data_cnt = 32;
     uint ref_tick = shred->data.flags & FD_SHRED_DATA_REF_TICK_MASK;
     char fec_complete[1024];
