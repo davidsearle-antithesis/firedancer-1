@@ -982,10 +982,10 @@ after_frag( fd_shred_ctx_t *    ctx,
     }
 
     if( FD_LIKELY( ctx->shred_out_idx!=ULONG_MAX  /* Only send to repair/replay in full Firedancer */
-                   && ( rv==FD_FEC_RESOLVER_SHRED_OKAY
-                      | rv==FD_FEC_RESOLVER_SHRED_COMPLETES
-                      | rv==FD_FEC_RESOLVER_SHRED_DUPLICATE
-                      | rv==FD_FEC_RESOLVER_SHRED_EQUIVOC ) ) ) {
+                   && ( ( rv==FD_FEC_RESOLVER_SHRED_OKAY )
+                      | ( rv==FD_FEC_RESOLVER_SHRED_COMPLETES )
+                      | ( rv==FD_FEC_RESOLVER_SHRED_DUPLICATE )
+                      | ( rv==FD_FEC_RESOLVER_SHRED_EQUIVOC ) ) ) ) {
 
       /* Construct the sig from the shred. */
 
