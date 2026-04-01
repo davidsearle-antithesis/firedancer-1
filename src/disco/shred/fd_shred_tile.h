@@ -18,8 +18,8 @@ typedef struct {
   /* ... rest of the structure members ... */
 } fd_shred_shared_ctx_t;
 
-/* shred_out has 3 possible messsage types, but 8 different message sigs
-   to differentiate betweeen different data sources.  All individual
+/* shred_out has 3 possible message types, but 8 different message sigs
+   to differentiate between different data sources.  All individual
    shred messages
    SHRED_SIG_SRC_{TURBINE,LEADER,RECONSTRUCTED,REPAIR,BAD_REPAIR} have
    the same dcache type fd_shred_base_t.  Only repair/bad_repair shreds
@@ -47,7 +47,7 @@ typedef struct {
 #define SHRED_SIG_FEC_COMPLETE        (6UL) /* FEC set complete */
 #define SHRED_SIG_FEC_COMPLETE_LEADER (7UL) /* leader FEC set complete */
 
-/* shred processsing result (first 32 bits of sig) */
+/* shred processing result (first 32 bits of sig) */
 #define SHRED_SIG_RESULT_COMPLETES     ( 1)
 #define SHRED_SIG_RESULT_OKAY          ( 0) /* default */
 #define SHRED_SIG_RESULT_DUPLICATE     (-1)
