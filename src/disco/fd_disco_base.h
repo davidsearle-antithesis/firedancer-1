@@ -42,13 +42,6 @@
 
 #define FD_SHRED_STORE_MTU (78656UL)
 
-/* FD_SHRED_OUT_MTU is the maximum size of a frag on the shred_out
-   link.  This is the size of a data shred header + merkle root
-   + chained merkle root + nonce/is_leader. */
-
-#define FD_SHRED_OUT_MTU (FD_SHRED_CODE_HEADER_SZ + 2*FD_SHRED_MERKLE_ROOT_SZ + sizeof(int))
-FD_STATIC_ASSERT( FD_SHRED_OUT_MTU == 157UL , update FD_SHRED_OUT_MTU );
-
 #define FD_NETMUX_SIG_MIN_HDR_SZ    ( 42UL) /* The default header size, which means no vlan tags and no IP options. */
 #define FD_NETMUX_SIG_IGNORE_HDR_SZ (102UL) /* Outside the allowable range, but still fits in 4 bits when compressed */
 
@@ -160,68 +153,6 @@ FD_FN_CONST static inline ulong fd_disco_execle_sig_pack_idx( ulong sig ) { retu
 
 #define FD_SHRED_OUT_MSG_TYPE_SHRED (0)
 #define FD_SHRED_OUT_MSG_TYPE_FEC   (1)
-
-FD_FN_CONST static inline int fd_disco_shred_out_msg_type( ulong sig ) { return fd_ulong_extract_bit( sig, 63 ); }
-
-FD_FN_CONST static inline ulong
-fd_disco_shred_out_shred_sig( int   is_turbine,
-                              ulong slot,
-                              uint  fec_set_idx,
-                              uint  shred_idx ) {
-   ulong slot_ul        = fd_ulong_min( slot, (ulong)UINT_MAX );
-   ulong shred_idx_ul   = fd_ulong_min( (ulong)shred_idx,   (ulong)FD_SHRED_BLK_MAX );
-   ulong fec_set_idx_ul = fd_ulong_min( (ulong)fec_set_idx, (ulong)FD_SHRED_BLK_MAX );
-   ulong is_turbine_ul  = !!is_turbine;
-   ulong msg_type_ul    = FD_SHRED_OUT_MSG_TYPE_SHRED;
-
-  return msg_type_ul << 63 | slot_ul << 31 | fec_set_idx_ul << 16 | is_turbine_ul << 15 | shred_idx_ul;
-}
-
-/* fd_disco_shred_out_shred_sig_{...} are accessors for the fields encoded
-   in the sig described above. */
-
-FD_FN_CONST static inline ulong fd_disco_shred_out_shred_sig_slot       ( ulong sig ) { return       fd_ulong_extract    ( sig, 31, 62 ); }
-FD_FN_CONST static inline uint  fd_disco_shred_out_shred_sig_fec_set_idx( ulong sig ) { return (uint)fd_ulong_extract    ( sig, 16, 30 ); }
-FD_FN_CONST static inline int   fd_disco_shred_out_shred_sig_is_turbine ( ulong sig ) { return       fd_ulong_extract_bit( sig, 15     ); }
-FD_FN_CONST static inline uint  fd_disco_shred_out_shred_sig_shred_idx  ( ulong sig ) { return (uint)fd_ulong_extract    ( sig, 0, 14  ); }
-
-FD_FN_CONST static inline ulong
-fd_disco_shred_out_fec_sig( ulong slot, uint fec_set_idx, uint data_cnt, int is_slot_complete ) {
-  ulong slot_ul          = fd_ulong_min( slot, (ulong)UINT_MAX );
-  ulong fec_set_idx_ul   = fd_ulong_min( (ulong)fec_set_idx, (ulong)FD_SHRED_BLK_MAX );
-  ulong data_cnt_ul      = fd_ulong_min( (ulong)data_cnt, (ulong)FD_SHRED_BLK_MAX );
-  ulong is_slot_complete_ul = !!is_slot_complete;
-  ulong msg_type_ul         = FD_SHRED_OUT_MSG_TYPE_FEC;
-  return msg_type_ul << 63 | slot_ul << 31 | fec_set_idx_ul << 16 | is_slot_complete_ul << 15 | data_cnt_ul;
-}
-
-FD_FN_CONST static inline ulong fd_disco_shred_out_fec_sig_slot            ( ulong sig ) { return         fd_ulong_extract    ( sig, 31, 62 ); }
-FD_FN_CONST static inline uint  fd_disco_shred_out_fec_sig_fec_set_idx     ( ulong sig ) { return (uint)  fd_ulong_extract    ( sig, 16, 30 ); }
-FD_FN_CONST static inline int   fd_disco_shred_out_fec_sig_is_slot_complete( ulong sig ) { return         fd_ulong_extract_bit( sig, 15     ); }
-FD_FN_CONST static inline uint  fd_disco_shred_out_fec_sig_data_cnt        ( ulong sig ) { return (uint)  fd_ulong_extract    ( sig, 0, 14  ); }
-
-/* Exclusively used for force completion messages */
-
-FD_FN_CONST static inline ulong
-fd_disco_repair_shred_sig( uint last_shred_idx ){
-   return (ulong) last_shred_idx;
-}
-
-FD_FN_CONST static inline uint fd_disco_repair_shred_sig_last_shred_idx( ulong sig ) { return (uint) sig; }
-
-
-FD_FN_CONST static inline ulong
-fd_disco_repair_replay_sig( ulong slot, ushort parent_off, uint data_cnt, int slot_complete ) {
-  /*
-   | slot (32) | parent_off (16) | data_cnt (15) | slot_complete(1)
-   | [32, 63]  | [16, 31]        | [1, 15]       | [0]
-  */
-  ulong slot_ul          = fd_ulong_min( slot, (ulong)UINT_MAX );
-  ulong parent_off_ul    = (ulong)parent_off;
-  ulong data_cnt_ul      = fd_ulong_min( (ulong)data_cnt, (ulong)FD_SHRED_BLK_MAX );
-  ulong slot_complete_ul = !!slot_complete;
-  return slot_ul << 32 | parent_off_ul << 16 | data_cnt_ul << 1 | slot_complete_ul;
-}
 
 FD_FN_PURE static inline ulong
 fd_disco_compact_chunk0( void * wksp ) {

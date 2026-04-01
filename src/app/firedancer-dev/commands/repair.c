@@ -154,11 +154,11 @@ repair_topo( config_t * config ) {
 
   /**/                 fd_topob_link( topo, "repair_net",   "net_repair",   config->net.ingress_buffer_size,          FD_NET_MTU,                    1UL );
 
-  FOR(shred_tile_cnt)  fd_topob_link( topo, "shred_out",    "shred_out",    pending_fec_shreds_depth,                 FD_SHRED_OUT_MTU,              2UL /* at most 2 msgs per after_frag */ );
+  FOR(shred_tile_cnt)  fd_topob_link( topo, "shred_out",    "shred_out",    pending_fec_shreds_depth,                 sizeof(fd_shred_message_t),    2UL /* at most 2 msgs per after_frag */ );
   FOR(sign_tile_cnt-1) fd_topob_link( topo, "repair_sign",  "repair_sign",  256UL,                                    FD_REPAIR_MAX_PREIMAGE_SZ,     1UL );
   FOR(sign_tile_cnt-1) fd_topob_link( topo, "sign_repair",  "sign_repair",  128UL,                                    sizeof(fd_ed25519_sig_t),      1UL );
 
-  /**/                 fd_topob_link( topo, "repair_out",   "repair_out",   128UL,                                    FD_SHRED_OUT_MTU,              1UL );
+  /**/                 fd_topob_link( topo, "repair_out",   "repair_out",   128UL,                                    sizeof(fd_shred_complete_t),   1UL );
 
   /**/                 fd_topob_link( topo, "poh_shred",    "poh_shred",    16384UL,                                  USHORT_MAX,                    1UL );
 
@@ -760,7 +760,7 @@ repair_cmd_fn_catchup( args_t *   args,
     if( FD_UNLIKELY( !turbine_slot0 ) ) {
       fd_frag_meta_t * frag = &shred_out_mcache[0]; /* hack to get first frag */
       if ( frag->sz > 0 ) {
-        turbine_slot0 = fd_disco_shred_out_shred_sig_slot( frag->sig );
+        //turbine_slot0 = fd_disco_shred_out_shred_sig_slot( frag->sig );
         FD_LOG_NOTICE(("turbine_slot0: %lu", turbine_slot0));
       }
     }

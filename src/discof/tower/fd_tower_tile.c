@@ -16,6 +16,7 @@
 #include "../../disco/metrics/fd_metrics.h"
 #include "../../disco/topo/fd_topo.h"
 #include "../../disco/fd_txn_m.h"
+#include "../../disco/shred/fd_shred_tile.h"
 #include "../../discof/fd_accdb_topo.h"
 #include "../../discof/replay/fd_replay_tile.h"
 #include "../../flamenco/accdb/fd_accdb_sync.h"
@@ -1370,7 +1371,7 @@ returnable_frag( fd_tower_tile_t *   ctx,
     return 0;
   }
   case IN_KIND_SHRED: {
-    if( FD_LIKELY( sz==FD_SHRED_MIN_SZ || sz==FD_SHRED_MAX_SZ ) ) { /* TODO depends on pending shred_out changes */
+    if( FD_LIKELY( sig==SHRED_SIG_SRC_TURBINE || sig==SHRED_SIG_SRC_REPAIR ) ) { /* TODO depends on pending shred_out changes */
       fd_shred_t                * shred = (fd_shred_t *)fd_type_pun( fd_chunk_to_laddr( ctx->in[ in_idx ].mem, chunk ) );
       fd_tower_slot_duplicate_t * out   = fd_chunk_to_laddr( ctx->out_mem, ctx->out_chunk );
       fd_epoch_leaders_t const * lsched = fd_multi_epoch_leaders_get_lsched_for_slot( ctx->mleaders, shred->slot );
