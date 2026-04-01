@@ -739,7 +739,7 @@ after_shred( ctx_t      * ctx,
   /* Insert the shred sig (shared by all shred members in the FEC set)
       into the map. */
   int is_code = fd_shred_is_code( fd_shred_type( shred->variant ) );
-  int src     = sig==SHRED_SIG_SRC_TURBINE ? SHRED_SRC_TURBINE : SHRED_SRC_REPAIR /* bad or good repair */ ;
+  int src     = fd_shred_sig_src( sig )==SHRED_SIG_SRC_TURBINE ? SHRED_SRC_TURBINE : SHRED_SRC_REPAIR /* bad or good repair */ ;
 
   if( FD_LIKELY( !is_code ) ) {
     long rtt = 0;
@@ -1012,7 +1012,7 @@ after_frag( ctx_t *             ctx,
         memcpy( fd_chunk_to_laddr( ctx->repair_out_ctx->mem, ctx->repair_out_ctx->chunk ), src, sz );
         fd_stem_publish( ctx->stem, ctx->repair_out_ctx->idx, sig, ctx->repair_out_ctx->chunk, sz, 0UL, 0UL, tspub );
         ctx->repair_out_ctx->chunk = fd_dcache_compact_next( ctx->repair_out_ctx->chunk, sz, ctx->repair_out_ctx->chunk0, ctx->repair_out_ctx->wmark );
-      } else {
+      } else if( FD_LIKELY( fd_shred_sig_res( sig )!=SHRED_SIG_RESULT_EQVOC ) ) {
         fd_hash_t * cmr = (fd_hash_t *)fd_type_pun(shred_msg->shred_ + fd_shred_chain_off( shred->variant ));
         after_shred( ctx, sig, shred, shred_msg->rnonce, &shred_msg->merkle_root, cmr );
       }

@@ -963,44 +963,49 @@ after_frag( fd_shred_ctx_t *    ctx,
       ctx->shred_out_chunk = fd_dcache_compact_next( ctx->shred_out_chunk, sizeof(fd_shred_evicted_t), ctx->shred_out_chunk0, ctx->shred_out_wmark );
     }
 
-    if( (rv==FD_FEC_RESOLVER_SHRED_OKAY) | (rv==FD_FEC_RESOLVER_SHRED_COMPLETES) | (rv==FD_FEC_RESOLVER_SHRED_DUPLICATE) ) {
-      if( FD_LIKELY( fd_disco_netmux_sig_proto( sig ) != DST_PROTO_REPAIR && rv!=FD_FEC_RESOLVER_SHRED_DUPLICATE ) ) {
-        /* Relay this shred */
-        ulong max_dest_cnt[1];
-        do {
-          /* If we've validated the shred and it COMPLETES but we can't
-            compute the destination for whatever reason, don't forward
-            the shred, but still send it to the blockstore. */
-          fd_shred_dest_t * sdest = fd_stake_ci_get_sdest_for_slot( ctx->stake_ci, shred->slot );
-          if( FD_UNLIKELY( !sdest ) ) break;
-          fd_shred_dest_idx_t * dests = fd_shred_dest_compute_children( sdest, &shred, 1UL, ctx->scratchpad_dests, 1UL, fanout, fanout, max_dest_cnt );
-          if( FD_UNLIKELY( !dests ) ) break;
+    if( FD_LIKELY( fd_disco_netmux_sig_proto( sig ) != DST_PROTO_REPAIR &&
+                 ( (rv==FD_FEC_RESOLVER_SHRED_OKAY) | (rv==FD_FEC_RESOLVER_SHRED_COMPLETES) ) ) ) {
+      /* Relay this shred */
+      ulong max_dest_cnt[1];
+      do {
+        /* If we've validated the shred and it COMPLETES but we can't
+          compute the destination for whatever reason, don't forward
+          the shred, but still send it to the blockstore. */
+        fd_shred_dest_t * sdest = fd_stake_ci_get_sdest_for_slot( ctx->stake_ci, shred->slot );
+        if( FD_UNLIKELY( !sdest ) ) break;
+        fd_shred_dest_idx_t * dests = fd_shred_dest_compute_children( sdest, &shred, 1UL, ctx->scratchpad_dests, 1UL, fanout, fanout, max_dest_cnt );
+        if( FD_UNLIKELY( !dests ) ) break;
 
-          for( ulong i=0UL; i<ctx->adtl_dests_retransmit_cnt; i++ ) send_shred( ctx, stem, *out_shred, ctx->adtl_dests_retransmit+i, ctx->tsorig );
-          for( ulong j=0UL; j<*max_dest_cnt; j++ ) send_shred( ctx, stem, *out_shred, fd_shred_dest_idx_to_dest( sdest, dests[ j ] ), ctx->tsorig );
-        } while( 0 );
-      }
-
-      if( FD_LIKELY( ctx->shred_out_idx!=ULONG_MAX ) ) { /* Only send to repair/replay in full Firedancer */
-
-        /* Construct the sig from the shred. */
-
-        ulong _sig = fd_disco_netmux_sig_proto( sig )==DST_PROTO_REPAIR
-                       ? ( from_repair /*nonce_okay*/ ? SHRED_SIG_SRC_REPAIR : SHRED_SIG_SRC_BAD_REPAIR )
-                       : ( SHRED_SIG_SRC_TURBINE );
-
-        /* Copy the shred header into the frag and publish. */
-
-        fd_shred_base_t * shred_msg = (fd_shred_base_t *)fd_chunk_to_laddr( ctx->shred_out_mem, ctx->shred_out_chunk );
-        shred_msg->shred            = **out_shred;
-        memcpy( &shred_msg->merkle_root, ctx->out_merkle_roots[0].hash, sizeof(fd_hash_t) );
-        if( FD_UNLIKELY( from_repair ) ) { shred_msg->rnonce = nonce; }
-
-        ulong tspub = fd_frag_meta_ts_comp( fd_tickcount() );
-        fd_stem_publish( stem, ctx->shred_out_idx, _sig, ctx->shred_out_chunk, sizeof(fd_shred_base_t), 0UL, ctx->tsorig, tspub );
-        ctx->shred_out_chunk = fd_dcache_compact_next( ctx->shred_out_chunk, sizeof(fd_shred_base_t), ctx->shred_out_chunk0, ctx->shred_out_wmark );
-      }
+        for( ulong i=0UL; i<ctx->adtl_dests_retransmit_cnt; i++ ) send_shred( ctx, stem, *out_shred, ctx->adtl_dests_retransmit+i, ctx->tsorig );
+        for( ulong j=0UL; j<*max_dest_cnt; j++ ) send_shred( ctx, stem, *out_shred, fd_shred_dest_idx_to_dest( sdest, dests[ j ] ), ctx->tsorig );
+      } while( 0 );
     }
+
+    if( FD_LIKELY( ctx->shred_out_idx!=ULONG_MAX  /* Only send to repair/replay in full Firedancer */
+                   && ( rv==FD_FEC_RESOLVER_SHRED_OKAY
+                      | rv==FD_FEC_RESOLVER_SHRED_COMPLETES
+                      | rv==FD_FEC_RESOLVER_SHRED_DUPLICATE
+                      | rv==FD_FEC_RESOLVER_SHRED_EQUIVOC ) ) ) {
+
+      /* Construct the sig from the shred. */
+
+      ulong _sig = fd_disco_netmux_sig_proto( sig )==DST_PROTO_REPAIR
+                     ? ( from_repair /*nonce_okay*/ ? SHRED_SIG_SRC_REPAIR : SHRED_SIG_SRC_BAD_REPAIR )
+                     : ( SHRED_SIG_SRC_TURBINE );
+      _sig = ((ulong)rv << 32UL) | _sig;
+
+      /* Copy the shred header into the frag and publish. */
+
+      fd_shred_base_t * shred_msg = (fd_shred_base_t *)fd_chunk_to_laddr( ctx->shred_out_mem, ctx->shred_out_chunk );
+      shred_msg->shred = **out_shred;
+      memcpy( &shred_msg->merkle_root, ctx->out_merkle_roots[0].hash, sizeof(fd_hash_t) );
+      if( FD_UNLIKELY( fd_disco_netmux_sig_proto( sig )==DST_PROTO_REPAIR ) ) { shred_msg->rnonce = nonce; }
+
+      ulong tspub = fd_frag_meta_ts_comp( fd_tickcount() );
+      fd_stem_publish( stem, ctx->shred_out_idx, _sig, ctx->shred_out_chunk, sizeof(fd_shred_base_t), 0UL, ctx->tsorig, tspub );
+      ctx->shred_out_chunk = fd_dcache_compact_next( ctx->shred_out_chunk, sizeof(fd_shred_base_t), ctx->shred_out_chunk0, ctx->shred_out_wmark );
+    }
+
     if( FD_LIKELY( rv!=FD_FEC_RESOLVER_SHRED_COMPLETES ) ) return;
 
     FD_TEST( ctx->fec_sets <= *out_fec_set );

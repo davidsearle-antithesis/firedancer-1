@@ -3,6 +3,7 @@
 
 #include "../tiles.h"
 #include "../../flamenco/types/fd_types_custom.h"
+#include "fd_fec_resolver.h"
 
 /* Forward declarations */
 typedef struct fd_fec_resolver fd_fec_resolver_t;
@@ -34,30 +35,37 @@ typedef struct {
    first 32 MSB is the shred processing result. */
 
 /* shred_base_t sigs */
-#define SHRED_SIG_SRC_TURBINE         (0UL) /* turbine shred */
-#define SHRED_SIG_SRC_LEADER          (1UL) /* shred created by leader */
-#define SHRED_SIG_SRC_RECONSTRUCTED   (2UL) /* reconstructed data shred */
-#define SHRED_SIG_SRC_REPAIR          (3UL) /* repair shred */
-#define SHRED_SIG_SRC_BAD_REPAIR      (4UL) /* repair shred with unverifiable nonce */
+#define SHRED_SIG_SRC_TURBINE         (0U) /* turbine shred */
+#define SHRED_SIG_SRC_LEADER          (1U) /* shred created by leader */
+#define SHRED_SIG_SRC_RECONSTRUCTED   (2U) /* reconstructed data shred */
+#define SHRED_SIG_SRC_REPAIR          (3U) /* repair shred */
+#define SHRED_SIG_SRC_BAD_REPAIR      (4U) /* repair shred with unverifiable nonce */
 
 /* fec_resolver event sigs */
 #define SHRED_SIG_FEC_EVICTED         (5UL) /* evicted */
 #define SHRED_SIG_FEC_COMPLETE        (6UL) /* FEC set complete */
 #define SHRED_SIG_FEC_COMPLETE_LEADER (7UL) /* leader FEC set complete */
 
-/* shred processsing result (currently unused) */
-#define SHRED_SIG_RESULT_OKAY          (0UL) /* default */
-#define SHRED_SIG_RESULT_DUPLICATE     (1UL)
-#define SHRED_SIG_RESULT_COMPLETES     (2UL)
-#define SHRED_SIG_RESULT_EQVOC         (4UL)
+/* shred processsing result (first 32 bits of sig) */
+#define SHRED_SIG_RESULT_COMPLETES     ( 1)
+#define SHRED_SIG_RESULT_OKAY          ( 0) /* default */
+#define SHRED_SIG_RESULT_DUPLICATE     (-1)
+#define SHRED_SIG_RESULT_EQVOC         (-4)
 
+FD_STATIC_ASSERT( SHRED_SIG_RESULT_COMPLETES == FD_FEC_RESOLVER_SHRED_COMPLETES, "shred sig result does not match fec_resolver result" );
+FD_STATIC_ASSERT( SHRED_SIG_RESULT_OKAY      == FD_FEC_RESOLVER_SHRED_OKAY,      "shred sig result does not match fec_resolver result" );
+FD_STATIC_ASSERT( SHRED_SIG_RESULT_DUPLICATE == FD_FEC_RESOLVER_SHRED_DUPLICATE, "shred sig result does not match fec_resolver result" );
+FD_STATIC_ASSERT( SHRED_SIG_RESULT_EQVOC     == FD_FEC_RESOLVER_SHRED_EQUIVOC,   "shred sig result does not match fec_resolver result" );
+
+static inline int  fd_shred_sig_res( ulong sig ) { return (int)(sig >> 32UL); }
+static inline uint fd_shred_sig_src( ulong sig ) { return (uint)sig; }
 struct fd_shred_base {
   union {
     uchar        shred_[ FD_SHRED_MAX_SZ ];
     fd_shred_t   shred;
   };
   fd_hash_t merkle_root;
-  uint      rnonce;        /* populated only for repair shreds */
+  uint      rnonce;        /* populated only for repair/bad_repair shreds */
 };
 typedef struct fd_shred_base fd_shred_base_t;
 

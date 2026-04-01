@@ -1371,7 +1371,7 @@ returnable_frag( fd_tower_tile_t *   ctx,
     return 0;
   }
   case IN_KIND_SHRED: {
-    if( FD_LIKELY( sig==SHRED_SIG_SRC_TURBINE || sig==SHRED_SIG_SRC_REPAIR ) ) {
+    if( FD_LIKELY( fd_shred_sig_src( sig )==SHRED_SIG_SRC_TURBINE || fd_shred_sig_src( sig )==SHRED_SIG_SRC_REPAIR ) ) {
       fd_shred_base_t           * msg   = (fd_shred_base_t *)fd_type_pun( fd_chunk_to_laddr( ctx->in[ in_idx ].mem, chunk ) );
       fd_shred_t                * shred = &msg->shred;
       fd_tower_slot_duplicate_t * out   = fd_chunk_to_laddr( ctx->out_mem, ctx->out_chunk );

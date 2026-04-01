@@ -418,11 +418,12 @@ after_frag( fd_gui_ctx_t *      ctx,
     case IN_KIND_SHRED_OUT: {
       FD_TEST( ctx->is_full_client );
       long tsorig_nanos = ctx->ref_wallclock + (long)((double)(fd_frag_meta_ts_decomp( tsorig, fd_tickcount() ) - ctx->ref_tickcount) / ctx->tick_per_ns);
-      if( FD_LIKELY( sig==SHRED_SIG_SRC_TURBINE || sig==SHRED_SIG_SRC_REPAIR || sig==SHRED_SIG_SRC_BAD_REPAIR ) ) {
+      uint sig_src      = fd_shred_sig_src( sig );
+      if( FD_LIKELY( sig_src==SHRED_SIG_SRC_TURBINE || sig_src==SHRED_SIG_SRC_REPAIR || sig_src==SHRED_SIG_SRC_BAD_REPAIR ) ) {
         fd_shred_base_t * msg = (fd_shred_base_t *)fd_type_pun( src );
         ulong slot      = msg->shred.slot;
         ulong shred_idx = msg->shred.idx;
-        int is_turbine  = sig==SHRED_SIG_SRC_TURBINE;
+        int is_turbine  = sig_src==SHRED_SIG_SRC_TURBINE;
         /* tsorig is the timestamp when the shred was received by the shred tile */
         fd_gui_handle_shred( ctx->gui, slot, shred_idx, is_turbine, tsorig_nanos );
       }
