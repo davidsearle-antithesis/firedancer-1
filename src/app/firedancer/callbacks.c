@@ -4,6 +4,8 @@
 #include "../../disco/store/fd_store.h"
 #include "../../flamenco/runtime/fd_bank.h"
 #include "../../flamenco/runtime/fd_acc_pool.h"
+#include "../../flamenco/runtime/fd_runtime_stack.h"
+#include "../../flamenco/runtime/fd_runtime_const.h"
 #include "../../flamenco/runtime/fd_txncache_shmem.h"
 #include "../../flamenco/progcache/fd_progcache.h"
 #include "../../funk/fd_funk.h"
@@ -282,6 +284,32 @@ fd_topo_obj_callbacks_t fd_obj_cb_rnonce_ss = {
   .footprint = rnonce_ss_footprint,
   .align     = rnonce_ss_align,
   .new       = rnonce_ss_new,
+};
+
+static ulong
+runtime_stack_footprint( fd_topo_t const *     topo FD_FN_UNUSED,
+                         fd_topo_obj_t const * obj  FD_FN_UNUSED ) {
+  return fd_runtime_stack_footprint( FD_RUNTIME_MAX_VOTE_ACCOUNTS, FD_RUNTIME_EXPECTED_VOTE_ACCOUNTS, FD_RUNTIME_EXPECTED_STAKE_ACCOUNTS );
+}
+
+static ulong
+runtime_stack_align( fd_topo_t const *     topo FD_FN_UNUSED,
+                     fd_topo_obj_t const * obj  FD_FN_UNUSED ) {
+  return fd_runtime_stack_align();
+}
+
+static void
+runtime_stack_new( fd_topo_t const *     topo,
+                   fd_topo_obj_t const * obj ) {
+  ulong seed = fd_pod_queryf_ulong( topo->props, 0UL, "obj.%lu.seed", obj->id );
+  FD_TEST( fd_runtime_stack_new( fd_topo_obj_laddr( topo, obj->id ), FD_RUNTIME_MAX_VOTE_ACCOUNTS, FD_RUNTIME_EXPECTED_VOTE_ACCOUNTS, FD_RUNTIME_EXPECTED_STAKE_ACCOUNTS, seed ) );
+}
+
+fd_topo_obj_callbacks_t fd_obj_cb_runtime_stack = {
+  .name      = "rtstack",
+  .footprint = runtime_stack_footprint,
+  .align     = runtime_stack_align,
+  .new       = runtime_stack_new,
 };
 
 #undef VAL

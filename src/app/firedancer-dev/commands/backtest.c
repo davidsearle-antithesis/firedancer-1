@@ -459,7 +459,19 @@ backtest_topo( config_t * config ) {
   fd_topo_obj_t * banks_obj = setup_topo_banks( topo, "banks", config->firedancer.runtime.max_live_slots, config->firedancer.runtime.max_fork_width, 0 );
   fd_topob_tile_uses( topo, replay_tile, banks_obj, FD_SHMEM_JOIN_MODE_READ_WRITE );
   FOR(execrp_tile_cnt) fd_topob_tile_uses( topo, &topo->tiles[ fd_topo_find_tile( topo, "execrp", i ) ], banks_obj, FD_SHMEM_JOIN_MODE_READ_WRITE );
+  if( FD_LIKELY( !disable_snap_loader ) ) {
+    fd_topob_tile_uses( topo, snapin_tile, banks_obj, FD_SHMEM_JOIN_MODE_READ_WRITE );
+  }
   FD_TEST( fd_pod_insertf_ulong( topo->props, banks_obj->id, "banks" ) );
+
+  /* rtstack_obj shared by replay and snapin tiles */
+  fd_topob_wksp( topo, "rtstack" );
+  fd_topo_obj_t * rtstack_obj = setup_topo_runtime_stack( topo, "rtstack" );
+  fd_topob_tile_uses( topo, replay_tile, rtstack_obj, FD_SHMEM_JOIN_MODE_READ_WRITE );
+  if( FD_LIKELY( !disable_snap_loader ) ) {
+    fd_topob_tile_uses( topo, snapin_tile, rtstack_obj, FD_SHMEM_JOIN_MODE_READ_WRITE );
+  }
+  FD_TEST( fd_pod_insertf_ulong( topo->props, rtstack_obj->id, "rtstack" ) );
 
   /* txncache_obj shared by replay, snapin, and execrp tiles */
   fd_topob_wksp( topo, "txncache"    );

@@ -1,5 +1,6 @@
 #include "fd_snapin_tile_private.h"
 #include "utils/fd_ssctrl.h"
+#include "utils/fd_ssload.h"
 #include "utils/fd_ssmsg.h"
 #include "utils/fd_vinyl_io_wd.h"
 
@@ -8,6 +9,7 @@
 #include "../../disco/gui/fd_gui_config_parse.h"
 #include "../../flamenco/accdb/fd_accdb_admin_v1.h"
 #include "../../flamenco/accdb/fd_accdb_impl_v1.h"
+#include "../../flamenco/runtime/fd_bank.h"
 #include "../../flamenco/runtime/fd_txncache.h"
 #include "../../flamenco/runtime/fd_system_ids.h"
 #include "../../flamenco/runtime/sysvar/fd_sysvar_slot_history.h"
@@ -625,6 +627,15 @@ process_manifest( fd_snapin_tile_t * ctx ) {
 
   manifest->txncache_fork_id = ctx->txncache_root_fork_id.val;
 
+  if( FD_LIKELY( ctx->banks ) ) {
+    fd_bank_t * bank = fd_banks_bank_query( ctx->banks, 0UL );
+    FD_TEST( bank );
+    fd_ssload_recover_bank( manifest, ctx->banks, bank, !ctx->full );
+    if( FD_LIKELY( ctx->runtime_stack ) ) {
+      fd_ssload_recover_epoch_stakes( manifest, bank, ctx->runtime_stack, !ctx->full );
+    }
+  }
+
   if( FD_LIKELY( !ctx->lthash_disabled ) ) {
     if( FD_LIKELY( ctx->use_vinyl ) ) {
       fd_ssctrl_hash_result_t * data = fd_chunk_to_laddr( ctx->hash_out.mem, ctx->hash_out.chunk );
@@ -1145,6 +1156,22 @@ unprivileged_init( fd_topo_t *      topo,
   FD_TEST( fd_accdb_user_v1_init ( ctx->accdb,       shfunk, shfunk_locks, tile->snapin.accdb_max_depth ) );
   ctx->funk = fd_accdb_user_v1_funk( ctx->accdb );
   fd_funk_txn_xid_copy( ctx->xid, fd_funk_root( ctx->funk ) );
+
+  ulong banks_obj_id = fd_pod_query_ulong( topo->props, "banks", ULONG_MAX );
+  if( FD_LIKELY( banks_obj_id!=ULONG_MAX ) ) {
+    ctx->banks = fd_banks_join( fd_topo_obj_laddr( topo, banks_obj_id ) );
+    FD_TEST( ctx->banks );
+  } else {
+    ctx->banks = NULL;
+  }
+
+  ulong rtstack_obj_id = fd_pod_query_ulong( topo->props, "rtstack", ULONG_MAX );
+  if( FD_LIKELY( rtstack_obj_id!=ULONG_MAX ) ) {
+    ctx->runtime_stack = fd_runtime_stack_join( fd_topo_obj_laddr( topo, rtstack_obj_id ) );
+    FD_TEST( ctx->runtime_stack );
+  } else {
+    ctx->runtime_stack = NULL;
+  }
 
   void * _txncache_shmem = fd_topo_obj_laddr( topo, tile->snapin.txncache_obj_id );
   fd_txncache_shmem_t * txncache_shmem = fd_txncache_shmem_join( _txncache_shmem );

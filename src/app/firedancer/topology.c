@@ -78,6 +78,15 @@ setup_topo_banks( fd_topo_t *  topo,
   return obj;
 }
 
+fd_topo_obj_t *
+setup_topo_runtime_stack( fd_topo_t * topo, char const * wksp_name ) {
+  fd_topo_obj_t * obj = fd_topob_obj( topo, "rtstack", wksp_name );
+  ulong seed;
+  FD_TEST( fd_rng_secure( &seed, sizeof(ulong) ) );
+  FD_TEST( fd_pod_insertf_ulong( topo->props, seed, "obj.%lu.seed", obj->id ) );
+  return obj;
+}
+
 static fd_topo_obj_t *
 setup_topo_fec_sets( fd_topo_t * topo, char const * wksp_name, ulong sz ) {
   fd_topo_obj_t * obj = fd_topob_obj( topo, "fec_sets", wksp_name );
@@ -469,6 +478,7 @@ fd_topo_initialize( config_t * config ) {
   fd_topob_wksp( topo, "fec_sets"      );
   fd_topob_wksp( topo, "txncache"      );
   fd_topob_wksp( topo, "banks"         );
+  fd_topob_wksp( topo, "rtstack"       );
   fd_topob_wksp( topo, "store"         )->core_dump_level = FD_TOPO_CORE_DUMP_LEVEL_FULL;
   fd_topob_wksp( topo, "rnonce"        );
 
@@ -1236,7 +1246,17 @@ fd_topo_initialize( config_t * config ) {
   FOR(execrp_tile_cnt) fd_topob_tile_uses( topo, &topo->tiles[ fd_topo_find_tile( topo, "execrp", i   ) ], banks_obj, FD_SHMEM_JOIN_MODE_READ_WRITE );
   FOR(execle_tile_cnt) fd_topob_tile_uses( topo, &topo->tiles[ fd_topo_find_tile( topo, "execle", i   ) ], banks_obj, FD_SHMEM_JOIN_MODE_READ_WRITE );
   FOR(resolv_tile_cnt) fd_topob_tile_uses( topo, &topo->tiles[ fd_topo_find_tile( topo, "resolv", i   ) ], banks_obj, FD_SHMEM_JOIN_MODE_READ_ONLY  );
+  if( FD_LIKELY( snapshots_enabled ) ) {
+    fd_topob_tile_uses( topo, &topo->tiles[ fd_topo_find_tile( topo, "snapin", 0UL ) ], banks_obj, FD_SHMEM_JOIN_MODE_READ_WRITE );
+  }
   FD_TEST( fd_pod_insertf_ulong( topo->props, banks_obj->id, "banks" ) );
+
+  fd_topo_obj_t * rtstack_obj = setup_topo_runtime_stack( topo, "rtstack" );
+  /**/   fd_topob_tile_uses( topo, &topo->tiles[ fd_topo_find_tile( topo, "replay", 0UL ) ], rtstack_obj, FD_SHMEM_JOIN_MODE_READ_WRITE );
+  if( FD_LIKELY( snapshots_enabled ) ) {
+    /**/ fd_topob_tile_uses( topo, &topo->tiles[ fd_topo_find_tile( topo, "snapin", 0UL ) ], rtstack_obj, FD_SHMEM_JOIN_MODE_READ_WRITE );
+  }
+  FD_TEST( fd_pod_insertf_ulong( topo->props, rtstack_obj->id, "rtstack" ) );
 
   if( FD_UNLIKELY( config->tiles.bundle.enabled ) ) {
     if( FD_UNLIKELY( config->firedancer.runtime.concurrent_account_limit<FD_ACC_POOL_MIN_ACCOUNT_CNT_PER_BUNDLE ) ) {

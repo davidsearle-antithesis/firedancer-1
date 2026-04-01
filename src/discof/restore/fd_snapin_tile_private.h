@@ -11,6 +11,7 @@
 #include "utils/fd_ssctrl.h"
 #include "../../flamenco/accdb/fd_accdb_admin.h"
 #include "../../flamenco/accdb/fd_accdb_user.h"
+#include "../../flamenco/runtime/fd_runtime_stack.h"
 #include "../../flamenco/runtime/fd_txncache.h"
 #include "../../disco/stem/fd_stem.h"
 #include "../../vinyl/meta/fd_vinyl_meta.h"
@@ -58,6 +59,8 @@ struct fd_snapin_tile {
   fd_accdb_admin_t accdb_admin[1];
   fd_accdb_user_t  accdb[1];
   fd_funk_t *      funk;
+  fd_banks_t *     banks;
+  fd_runtime_stack_t * runtime_stack;
 
   fd_txncache_t * txncache;
   uchar *         acc_data;
