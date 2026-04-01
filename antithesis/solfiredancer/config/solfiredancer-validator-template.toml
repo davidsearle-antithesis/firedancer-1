@@ -1,0 +1,98 @@
+# =============================================================================
+# solfiredancer — Firedancer validator config template for Antithesis testing
+#
+# This template is used by the entrypoint script.  Environment variables
+# are substituted at runtime.  It is also a reference for what a
+# container-friendly Firedancer configuration looks like.
+#
+# Key differences from production:
+#   - net.provider = "socket" (no XDP in containers)
+#   - hugetlbfs.max_page_size = "huge" (no gigantic pages in containers)
+#   - development.sandbox = false (no seccomp in containers)
+#   - development.no_clone = true (single-process for container compat)
+#   - development.genesis.validate_genesis_hash = false (local testnet)
+#   - consensus.wait_for_vote_to_start_leader = false (faster startup)
+#   - Reduced tile counts (container CPU budget)
+# =============================================================================
+
+name = "fd1"
+user = "solana"
+telemetry = false
+
+[paths]
+    identity_key = "/data/identity.json"
+    vote_account = "/data/vote.json"
+    genesis = "/genesis/ledger/genesis.bin"
+
+[log]
+    path = "/data/firedancer.log"
+    level_logfile = "DEBUG"
+    level_stderr = "INFO"
+    level_flush = "WARNING"
+
+[gossip]
+    entrypoints = ["10.0.0.10:8001"]
+    port = 8700
+
+[consensus]
+    expected_shred_version = 0
+    wait_for_vote_to_start_leader = false
+
+[accounts]
+    max_accounts = 10_000_000
+    file_size_gib = 8
+
+[layout]
+    affinity = "auto"
+    net_tile_count = 1
+    quic_tile_count = 1
+    resolv_tile_count = 1
+    verify_tile_count = 4
+    gossvf_tile_count = 1
+    execle_tile_count = 2
+    execrp_tile_count = 4
+    shred_tile_count = 1
+    sign_tile_count = 2
+    snapshot_hash_tile_count = 2
+
+[net]
+    provider = "socket"
+
+    [net.socket]
+        receive_buffer_size = 134217728
+        send_buffer_size = 134217728
+
+[hugetlbfs]
+    max_page_size = "huge"
+
+[snapshots]
+    incremental_snapshots = false
+
+[rpc]
+    port = 8123
+    full_api = true
+    extended_tx_metadata_storage = true
+
+[tiles]
+    [tiles.repair]
+        repair_intake_listen_port = 8701
+        repair_serve_listen_port = 8702
+
+    [tiles.replay]
+        snapshot = ""
+
+    [tiles.gui]
+        enabled = false
+
+[development]
+    sandbox = false
+    no_clone = true
+
+    [development.genesis]
+        validate_genesis_hash = false
+        hashes_per_tick = 1024
+        ticks_per_slot = 64
+        target_tick_duration_micros = 6250
+        fund_initial_accounts = 1024
+        fund_initial_amount_lamports = 50000000000000
+        warmup_epochs = false

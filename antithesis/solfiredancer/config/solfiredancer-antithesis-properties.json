@@ -1,0 +1,190 @@
+{
+  "$schema": "https://docs.antithesis.com/schemas/properties.json",
+  "name": "solfiredancer",
+  "description": "Antithesis property definitions for Firedancer Solana validator consensus testing",
+
+  "safety_properties": [
+    {
+      "name": "root_slot_never_decreases",
+      "description": "The root (finalized) slot must be monotonically non-decreasing on every validator. A decrease indicates a finality violation.",
+      "severity": "critical",
+      "assertion_class": "solfiredancer",
+      "message_pattern": "root slot must never decrease"
+    },
+    {
+      "name": "no_equivocation",
+      "description": "A validator must never vote on two different blocks at the same slot height. This is a slashable offense in Solana consensus.",
+      "severity": "critical",
+      "assertion_class": "solfiredancer",
+      "message_pattern": "equivocation: voted on two different blocks"
+    },
+    {
+      "name": "vote_lockout_respected",
+      "description": "Validators must not switch forks before their vote lockout expires. Lockout = 2^confirmation_count slots.",
+      "severity": "critical",
+      "assertion_class": "solfiredancer",
+      "message_pattern": "fork switch before vote lockout expired"
+    },
+    {
+      "name": "ghost_weight_nonnegative",
+      "description": "GHOST fork choice weights must never be negative. Negative weight indicates a stake accounting bug.",
+      "severity": "high",
+      "assertion_class": "solfiredancer",
+      "message_pattern": "GHOST fork weight is negative"
+    },
+    {
+      "name": "slot_timing_bounded",
+      "description": "Slot boundaries must not drift more than 100ms from expected wallclock time. Excessive drift breaks consensus timing.",
+      "severity": "high",
+      "assertion_class": "solfiredancer",
+      "message_pattern": "slot boundary drifted beyond acceptable"
+    },
+    {
+      "name": "replay_meets_deadline",
+      "description": "Block replay must complete before the validator's next leader slot deadline. Missing the deadline means skipped leader slots.",
+      "severity": "medium",
+      "assertion_class": "solfiredancer",
+      "message_pattern": "replay did not complete before leader deadline"
+    },
+    {
+      "name": "bank_hash_agreement",
+      "description": "All validators that finalize the same slot must agree on the bank hash. Disagreement indicates state divergence.",
+      "severity": "critical",
+      "assertion_class": "solfiredancer",
+      "message_pattern": "bank hash mismatch for finalized slot"
+    },
+    {
+      "name": "no_shred_equivocation",
+      "description": "A leader must not produce conflicting shreds for the same (slot, index). This is detectable by the eqvoc protocol.",
+      "severity": "critical",
+      "assertion_class": "solfiredancer",
+      "message_pattern": "shred equivocation"
+    },
+    {
+      "name": "no_duplicate_transaction_in_block",
+      "description": "The pack tile must not include the same transaction twice in a single block.",
+      "severity": "high",
+      "assertion_class": "solfiredancer",
+      "message_pattern": "duplicate transaction packed"
+    }
+  ],
+
+  "liveness_properties": [
+    {
+      "name": "leader_produces_blocks",
+      "description": "At least one Firedancer validator should successfully produce a block as leader during the test.",
+      "assertion_class": "solfiredancer",
+      "message_pattern": "this validator produced a block as leader"
+    },
+    {
+      "name": "repair_recovers_shreds",
+      "description": "The repair protocol should successfully recover missing shreds at least once during the test.",
+      "assertion_class": "solfiredancer",
+      "message_pattern": "repair recovered missing shreds"
+    },
+    {
+      "name": "gossip_discovers_peers",
+      "description": "Gossip should discover all validators in the cluster at least once.",
+      "assertion_class": "solfiredancer",
+      "message_pattern": "gossip discovered all expected peers"
+    },
+    {
+      "name": "gossip_reaches_saturation",
+      "description": "Gossip peer table should reach saturation (stable for 15 seconds).",
+      "assertion_class": "solfiredancer",
+      "message_pattern": "gossip reached peer saturation"
+    },
+    {
+      "name": "epoch_boundary_crossed",
+      "description": "The cluster should cross at least one epoch boundary during the test.",
+      "assertion_class": "solfiredancer",
+      "message_pattern": "epoch boundary was crossed"
+    }
+  ],
+
+  "reachability_properties": [
+    {
+      "name": "fork_created_and_resolved",
+      "description": "A fork should be created and subsequently resolved during testing.",
+      "assertion_class": "solfiredancer",
+      "message_pattern": "fork was created and later resolved"
+    },
+    {
+      "name": "leader_rotation_occurred",
+      "description": "Leader rotation should occur (different validators produce blocks).",
+      "assertion_class": "solfiredancer",
+      "message_pattern": "leader rotation occurred"
+    },
+    {
+      "name": "repair_protocol_activated",
+      "description": "The repair protocol should be activated to fill at least one shred gap.",
+      "assertion_class": "solfiredancer",
+      "message_pattern": "repair protocol activated"
+    },
+    {
+      "name": "snapshot_catchup",
+      "description": "A validator should catch up to the cluster via snapshot at least once.",
+      "assertion_class": "solfiredancer",
+      "message_pattern": "validator caught up via snapshot"
+    },
+    {
+      "name": "consensus_vote_cast",
+      "description": "A Firedancer validator should cast at least one consensus vote.",
+      "assertion_class": "solfiredancer",
+      "message_pattern": "validator cast a consensus vote"
+    }
+  ],
+
+  "fault_injection": {
+    "network": {
+      "packet_drop": {
+        "description": "Drop incoming or outgoing UDP packets to simulate packet loss",
+        "targets": ["src/disco/net/fd_net_tile.c", "src/waltz/udp/"],
+        "probability_range": [0.01, 0.10]
+      },
+      "packet_delay": {
+        "description": "Delay packet processing by 10-200ms to simulate network latency",
+        "targets": ["src/disco/net/fd_net_tile.c"],
+        "delay_range_ms": [10, 200]
+      },
+      "partition": {
+        "description": "Partition a subset of validators from the rest of the cluster",
+        "targets": ["docker-compose network rules"],
+        "notes": "Use Antithesis network fault injection to isolate containers"
+      }
+    },
+    "clock": {
+      "skew": {
+        "description": "Skew wallclock reads by +/- 100ms to stress timing-dependent code",
+        "targets": ["src/discoh/pohh/fd_pohh_tile.c"],
+        "skew_range_ms": [-100, 100]
+      }
+    },
+    "disk": {
+      "write_failure": {
+        "description": "Fail blockstore or account DB writes to test crash recovery",
+        "targets": ["src/funk/", "src/vinyl/"],
+        "probability_range": [0.001, 0.01]
+      },
+      "read_delay": {
+        "description": "Delay blockstore reads to simulate slow storage",
+        "targets": ["src/funk/"],
+        "delay_range_ms": [5, 50]
+      }
+    },
+    "gossip": {
+      "message_drop": {
+        "description": "Drop gossip messages to simulate partial cluster partition",
+        "targets": ["src/discof/gossip/fd_gossip_tile.c"],
+        "probability_range": [0.05, 0.20]
+      }
+    },
+    "repair": {
+      "response_failure": {
+        "description": "Fail repair responses to test shred recovery under adversity",
+        "targets": ["src/discof/repair/"],
+        "probability_range": [0.05, 0.15]
+      }
+    }
+  }
+}

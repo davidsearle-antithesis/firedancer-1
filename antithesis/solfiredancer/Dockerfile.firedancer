@@ -1,0 +1,121 @@
+# =============================================================================
+# solfiredancer — Firedancer validator image for Antithesis testing
+# =============================================================================
+#
+# Build (amd64 only — Antithesis runs on amd64):
+#   podman build --arch amd64 \
+#     -t solfiredancer-firedancer:latest -f Dockerfile.firedancer ../..
+#
+# The build context must be the firedancer repo root so that source is available.
+# =============================================================================
+
+# ---------------------------------------------------------------------------
+# Stage 1: build Firedancer + Agave CLI tools (x86_64)
+# ---------------------------------------------------------------------------
+FROM ubuntu:22.04 AS builder
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Install build deps + packages required by deps.sh check
+# pkgconf must be installed before build-essential to avoid the
+# pkgconf/pkg-config conflict on Ubuntu 22.04.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends pkgconf \
+    && apt-get install -y --no-install-recommends \
+        build-essential gcc g++ clang lld \
+        git curl wget ca-certificates \
+        autoconf automake libtool cmake \
+        libssl-dev zlib1g-dev libudev-dev libgmp-dev \
+        libclang-dev llvm lcov \
+        protobuf-compiler libprotobuf-dev libprotoc-dev \
+        perl \
+        python3 python3-pip \
+        jq xxd \
+        zstd bison flex gcc-multilib gettext autopoint \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Rust (needed for Agave / Frankendancer shim)
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
+    | sh -s -- -y --default-toolchain 1.79.0
+ENV PATH="/root/.cargo/bin:${PATH}"
+
+WORKDIR /build/firedancer
+COPY . .
+
+# Install Firedancer native dependencies
+RUN ./deps.sh +dev fetch check install
+
+# Init submodules (needed for Frankendancer / Agave CLI builds)
+RUN git submodule update --init --recursive
+
+# Tell Rust crates to use system OpenSSL + protobuf instead of vendoring.
+# Vendored builds fail under qemu due to Make jobserver FD issues.
+ENV OPENSSL_NO_VENDOR=1
+ENV PROTOBUF_NO_VENDOR=1
+ENV PROTOC=/usr/bin/protoc
+
+# Step 1: Build Firedancer C code
+RUN MACHINE=linux_gcc_x86_64 make -j$(nproc) EXTRAS="debug"
+
+# Step 2: Build fdctl + solana CLI (Rust, links against Firedancer)
+# Separate layer so Docker can cache the C build above.
+RUN MACHINE=linux_gcc_x86_64 make -j$(nproc) EXTRAS="debug" fdctl solana
+
+# Step 3: Build remaining Agave tools not covered by `make solana`:
+#   solana-genesis, solana-keygen, agave-validator
+# linux_gcc_x86_64 + with-optimization => RUST_PROFILE=release-with-debug
+RUN cd agave && \
+    env --unset=LDFLAGS \
+        RUSTFLAGS="-L /build/firedancer/build/linux/gcc/x86_64/lib -l fdctl_version" \
+    ./cargo build --profile=release-with-debug \
+        --bin solana-genesis \
+        --bin solana-keygen \
+        --bin agave-validator
+
+# ---------------------------------------------------------------------------
+# Stage 2: runtime image
+# ---------------------------------------------------------------------------
+FROM ubuntu:22.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        ca-certificates curl wget jq iproute2 \
+        libssl3 zlib1g libudev1 \
+        python3 python3-pip \
+        bzip2 zstd \
+        sudo \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create an unprivileged user for the validator to drop to
+RUN useradd -m -s /bin/bash solana
+
+# Copy Firedancer binaries
+# MACHINE=linux_gcc_x86_64 => BUILDDIR=linux/gcc/x86_64
+COPY --from=builder /build/firedancer/build/linux/gcc/x86_64/bin/firedancer-dev /usr/local/bin/
+COPY --from=builder /build/firedancer/build/linux/gcc/x86_64/bin/fdctl          /usr/local/bin/
+COPY --from=builder /build/firedancer/opt/lib/ /usr/local/lib/
+
+# Copy Agave CLI tools (RUST_PROFILE=release-with-debug for this machine)
+COPY --from=builder /build/firedancer/build/linux/gcc/x86_64/bin/solana         /usr/local/bin/
+COPY --from=builder /build/firedancer/agave/target/release-with-debug/solana-genesis   /usr/local/bin/
+COPY --from=builder /build/firedancer/agave/target/release-with-debug/solana-keygen    /usr/local/bin/
+COPY --from=builder /build/firedancer/agave/target/release-with-debug/agave-validator  /usr/local/bin/
+
+# Copy Antithesis instrumentation header (for reference / rebuilds)
+COPY antithesis/solfiredancer/instrumentation/ /opt/antithesis/instrumentation/
+
+# Copy entrypoint scripts
+COPY antithesis/solfiredancer/solfiredancer-entrypoint-bootstrap.sh  /entrypoint-bootstrap.sh
+COPY antithesis/solfiredancer/solfiredancer-entrypoint-validator.sh  /entrypoint-validator.sh
+COPY antithesis/solfiredancer/config/                                /opt/antithesis/config/
+
+RUN chmod +x /entrypoint-bootstrap.sh /entrypoint-validator.sh
+
+# Ensure dynamic linker can find our libs
+RUN ldconfig
+
+# Default data directory
+RUN mkdir -p /data && chown solana:solana /data
+
+ENTRYPOINT ["/entrypoint-validator.sh"]
