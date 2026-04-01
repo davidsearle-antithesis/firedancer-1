@@ -749,6 +749,7 @@ repair_cmd_fn_catchup( args_t *   args,
   FD_TEST( shred_out_link_idx!=ULONG_MAX );
   fd_topo_link_t * shred_out_link   = &config->topo.links[ shred_out_link_idx  ];
   fd_frag_meta_t * shred_out_mcache = shred_out_link->mcache;
+  void * shred_out_dcache = config->topo.workspaces[ config->topo.objs[ shred_out_link->dcache_obj_id ].wksp_id ].wksp;
 
   ulong turbine_slot0 = 0;
   long  last_print    = fd_log_wallclock();
@@ -760,7 +761,9 @@ repair_cmd_fn_catchup( args_t *   args,
     if( FD_UNLIKELY( !turbine_slot0 ) ) {
       fd_frag_meta_t * frag = &shred_out_mcache[0]; /* hack to get first frag */
       if ( frag->sz > 0 ) {
-        //turbine_slot0 = fd_disco_shred_out_shred_sig_slot( frag->sig );
+        uchar      * shred_out_chunk = fd_chunk_to_laddr( shred_out_dcache, frag->chunk );
+        fd_shred_t * shred_out_shred = (fd_shred_t *)fd_type_pun( shred_out_chunk );
+        turbine_slot0 = shred_out_shred->slot;
         FD_LOG_NOTICE(("turbine_slot0: %lu", turbine_slot0));
       }
     }

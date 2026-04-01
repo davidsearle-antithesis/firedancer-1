@@ -116,44 +116,6 @@ fd_disco_execle_sig( ulong slot,
 FD_FN_CONST static inline ulong fd_disco_execle_sig_slot( ulong sig ) { return (sig >> 32); }
 FD_FN_CONST static inline ulong fd_disco_execle_sig_pack_idx( ulong sig ) { return sig & 0xFFFFFFFFUL; }
 
-/* fd_disco_shred_out_shred_sig constructs a sig for the shred_out link.
-   The encoded fields vary depending on the type of the sig.  The
-   diagram below describes the encoding.
-
-   for sz==FD_SHRED_OUT_MTU
-
-   msg_type (1)   | slot (32) | fec_set_idx (15) | is_turbine (1) | shred_idx (15) |
-   MSG_TYPE_SHRED | [31, 62]  | [16, 30]         | [15]           | [0, 14]        |
-
-   in the above case, the last 4 bytes of the dcache entry are the nonce.
-
-   msg_type (1)   | slot (32) | fec_set_idx (15)| is_slot_complete (1) | data_cnt (15) |
-   MSG_TYPE_FEC   | [31, 62]  | [16, 30]        | [15]                 | [0, 14]       | => should soon always be 32
-
-   in the above case, the last 4 bytes of the dcache entry are the is_leader flag..
-
-   for sz==0:
-   these are FEC_CLEAR messages and look like MSG_TYPE_SHRED but with some unpopulated fields:
-   ...   | slot (32) | fec_set_idx (15) | ...  | max_shred_idx (15) |
-   ...   | [31, 62]  | [16, 30]         | ...  | [0, 14]            |
-
-   is_turbine describes whether this shred source was turbine or repair.
-   If the source is repair, then the nonce value in the dcache will
-   have meaning.
-
-   Note: if the slot number is >= UINT_MAX, the sender will store the
-   value UINT_MAX in this field. If the receiver sees a value of
-   UINT_MAX in the field, it must read the actual slot number from the
-   dcache entry.
-
-   The following 15 bits describe the fec_set_idx.  This is a
-   15-bit value because shreds are bounded to 2^15 per slot, so in the
-   worst case there is an independent FEC set for every shred, which
-   results in at most 2^15 FEC sets per slot. */
-
-#define FD_SHRED_OUT_MSG_TYPE_SHRED (0)
-#define FD_SHRED_OUT_MSG_TYPE_FEC   (1)
-
 FD_FN_PURE static inline ulong
 fd_disco_compact_chunk0( void * wksp ) {
   return (((struct fd_wksp_private *)wksp)->gaddr_lo) >> FD_CHUNK_LG_SZ;
