@@ -668,7 +668,6 @@ fd_vote_state_versioned_deserialize_inner( fd_vote_state_versioned_t * self,
   uchar const * ptr = payload;
   ulong         rem = payload_sz;
 
-  /* Discriminant */
   uint kind;
   READ_U32( kind, &ptr, &rem );
 
@@ -680,104 +679,50 @@ fd_vote_state_versioned_deserialize_inner( fd_vote_state_versioned_t * self,
       return 0;
 
     case fd_vote_state_versioned_enum_v1_14_11: {
-      /* Node pubkey */
       READ_PUBKEY( self->v1_14_11.node_pubkey, &ptr, &rem );
-
-      /* Authorized withdrawer */
       READ_PUBKEY( self->v1_14_11.authorized_withdrawer, &ptr, &rem );
-
-      /* Commission */
       READ_U8( self->v1_14_11.commission, &ptr, &rem );
-
-      /* Votes (v1_14_11 wire format is Lockout, not LandedVote) */
-      CHECK( !deser_votes( self->v1_14_11.votes, 1, &ptr, &rem ) );
-
-      /* Root slot */
+      CHECK( !deser_votes( self->v1_14_11.votes, 1, &ptr, &rem ) ); /* v1_14_11 wire format is Lockout, not LandedVote */
       CHECK( !deser_root_slot( &self->v1_14_11.has_root_slot, &self->v1_14_11.root_slot, &ptr, &rem ) );
-
-      /* Authorized voters */
       CHECK( !deser_authorized_voters( self->v1_14_11.authorized_voters.pool, self->v1_14_11.authorized_voters.treap, &ptr, &rem ) );
-
-      /* Prior voters */
       CHECK( !deser_prior_voters( &self->v1_14_11.prior_voters, &ptr, &rem ) );
-
-      /* Epoch credits */
       CHECK( !deser_epoch_credits( self->v1_14_11.epoch_credits, &ptr, &rem ) );
-
-      /* Last timestamp */
       READ_BYTES( &self->v1_14_11.last_timestamp, sizeof(fd_vote_block_timestamp_t), &ptr, &rem );
       break;
     }
 
     case fd_vote_state_versioned_enum_v3: {
-      /* Node pubkey */
       READ_PUBKEY( self->v3.node_pubkey, &ptr, &rem );
-
-      /* Authorized withdrawer */
       READ_PUBKEY( self->v3.authorized_withdrawer, &ptr, &rem );
-
-      /* Commission */
       READ_U8( self->v3.commission, &ptr, &rem );
-
-      /* Votes (v3 wire format is LandedVote, includes latency) */
       CHECK( !deser_votes( self->v3.votes, 0, &ptr, &rem ) );
-
-      /* Root slot */
       CHECK( !deser_root_slot( &self->v3.has_root_slot, &self->v3.root_slot, &ptr, &rem ) );
-
-      /* Authorized voters */
       CHECK( !deser_authorized_voters( self->v3.authorized_voters.pool, self->v3.authorized_voters.treap, &ptr, &rem ) );
-
-      /* Prior voters */
       CHECK( !deser_prior_voters( &self->v3.prior_voters, &ptr, &rem ) );
-
-      /* Epoch credits */
       CHECK( !deser_epoch_credits( self->v3.epoch_credits, &ptr, &rem ) );
-
-      /* Last timestamp */
       READ_BYTES( &self->v3.last_timestamp, sizeof(fd_vote_block_timestamp_t), &ptr, &rem );
       break;
     }
 
     case fd_vote_state_versioned_enum_v4: {
-      /* Node pubkey */
       READ_PUBKEY( self->v4.node_pubkey, &ptr, &rem );
-
-      /* Authorized withdrawer */
       READ_PUBKEY( self->v4.authorized_withdrawer, &ptr, &rem );
-
-      /* Inflation rewards collector */
       READ_PUBKEY( self->v4.inflation_rewards_collector, &ptr, &rem );
-
-      /* Block revenue collector */
       READ_PUBKEY( self->v4.block_revenue_collector, &ptr, &rem );
-
-      /* Commission (bps) */
       READ_U16( self->v4.inflation_rewards_commission_bps, &ptr, &rem );
       READ_U16( self->v4.block_revenue_commission_bps, &ptr, &rem );
-
-      /* Pending delegator rewards */
       READ_U64( self->v4.pending_delegator_rewards, &ptr, &rem );
 
-      /* BLS pubkey compressed (Option<[u8; 48]>) */
+      /* Option<[u8; 48]> */
       READ_OPTION( self->v4.has_bls_pubkey_compressed, &ptr, &rem );
       if( self->v4.has_bls_pubkey_compressed ) {
         READ_BYTES( self->v4.bls_pubkey_compressed, FD_BLS_PUBKEY_COMPRESSED_SZ, &ptr, &rem );
       }
 
-      /* Votes (v4 wire format is LandedVote, includes latency) */
       CHECK( !deser_votes( self->v4.votes, 0, &ptr, &rem ) );
-
-      /* Root slot */
       CHECK( !deser_root_slot( &self->v4.has_root_slot, &self->v4.root_slot, &ptr, &rem ) );
-
-      /* Authorized voters */
       CHECK( !deser_authorized_voters( self->v4.authorized_voters.pool, self->v4.authorized_voters.treap, &ptr, &rem ) );
-
-      /* Epoch credits (v4 has no prior_voters) */
-      CHECK( !deser_epoch_credits( self->v4.epoch_credits, &ptr, &rem ) );
-
-      /* Last timestamp */
+      CHECK( !deser_epoch_credits( self->v4.epoch_credits, &ptr, &rem ) ); /* v4 has no prior_voters */
       READ_BYTES( &self->v4.last_timestamp, sizeof(fd_vote_block_timestamp_t), &ptr, &rem );
       break;
     }
@@ -807,7 +752,6 @@ fd_vote_state_versioned_serialize( fd_vote_state_versioned_t const * self,
   uchar * out    = buf;
   ulong   out_sz = buf_sz;
 
-  /* Discriminant */
   WRITE_U32( self->kind, &out, &out_sz );
 
   switch( self->kind ) {
@@ -816,104 +760,50 @@ fd_vote_state_versioned_serialize( fd_vote_state_versioned_t const * self,
       return 0;
 
     case fd_vote_state_versioned_enum_v1_14_11: {
-      /* Node pubkey */
       WRITE_PUBKEY( self->v1_14_11.node_pubkey, &out, &out_sz );
-
-      /* Authorized withdrawer */
       WRITE_PUBKEY( self->v1_14_11.authorized_withdrawer, &out, &out_sz );
-
-      /* Commission */
       WRITE_U8( self->v1_14_11.commission, &out, &out_sz );
-
-      /* Votes (v1_14_11 wire format is Lockout, not LandedVote) */
-      CHECK( !ser_votes( self->v1_14_11.votes, 1, &out, &out_sz ) );
-
-      /* Root slot */
+      CHECK( !ser_votes( self->v1_14_11.votes, 1, &out, &out_sz ) ); /* v1_14_11 wire format is Lockout, not LandedVote */
       CHECK( !ser_root_slot( self->v1_14_11.has_root_slot, self->v1_14_11.root_slot, &out, &out_sz ) );
-
-      /* Authorized voters */
       CHECK( !ser_authorized_voters( self->v1_14_11.authorized_voters.pool, self->v1_14_11.authorized_voters.treap, &out, &out_sz ) );
-
-      /* Prior voters */
       CHECK( !ser_prior_voters( &self->v1_14_11.prior_voters, &out, &out_sz ) );
-
-      /* Epoch credits */
       CHECK( !ser_epoch_credits( self->v1_14_11.epoch_credits, &out, &out_sz ) );
-
-      /* Last timestamp */
       WRITE_BYTES( &self->v1_14_11.last_timestamp, sizeof(fd_vote_block_timestamp_t), &out, &out_sz );
       break;
     }
 
     case fd_vote_state_versioned_enum_v3: {
-      /* Node pubkey */
       WRITE_PUBKEY( self->v3.node_pubkey, &out, &out_sz );
-
-      /* Authorized withdrawer */
       WRITE_PUBKEY( self->v3.authorized_withdrawer, &out, &out_sz );
-
-      /* Commission */
       WRITE_U8( self->v3.commission, &out, &out_sz );
-
-      /* Votes (v3 wire format is LandedVote, includes latency) */
       CHECK( !ser_votes( self->v3.votes, 0, &out, &out_sz ) );
-
-      /* Root slot */
       CHECK( !ser_root_slot( self->v3.has_root_slot, self->v3.root_slot, &out, &out_sz ) );
-
-      /* Authorized voters */
       CHECK( !ser_authorized_voters( self->v3.authorized_voters.pool, self->v3.authorized_voters.treap, &out, &out_sz ) );
-
-      /* Prior voters */
       CHECK( !ser_prior_voters( &self->v3.prior_voters, &out, &out_sz ) );
-
-      /* Epoch credits */
       CHECK( !ser_epoch_credits( self->v3.epoch_credits, &out, &out_sz ) );
-
-      /* Last timestamp */
       WRITE_BYTES( &self->v3.last_timestamp, sizeof(fd_vote_block_timestamp_t), &out, &out_sz );
       break;
     }
 
     case fd_vote_state_versioned_enum_v4: {
-      /* Node pubkey */
       WRITE_PUBKEY( self->v4.node_pubkey, &out, &out_sz );
-
-      /* Authorized withdrawer */
       WRITE_PUBKEY( self->v4.authorized_withdrawer, &out, &out_sz );
-
-      /* Inflation rewards collector */
       WRITE_PUBKEY( self->v4.inflation_rewards_collector, &out, &out_sz );
-
-      /* Block revenue collector */
       WRITE_PUBKEY( self->v4.block_revenue_collector, &out, &out_sz );
-
-      /* Commission (bps) */
       WRITE_U16( self->v4.inflation_rewards_commission_bps, &out, &out_sz );
       WRITE_U16( self->v4.block_revenue_commission_bps, &out, &out_sz );
-
-      /* Pending delegator rewards */
       WRITE_U64( self->v4.pending_delegator_rewards, &out, &out_sz );
 
-      /* BLS pubkey compressed (Option<[u8; 48]>) */
+      /* Option<[u8; 48]> */
       WRITE_OPTION( self->v4.has_bls_pubkey_compressed, &out, &out_sz );
       if( self->v4.has_bls_pubkey_compressed ) {
         WRITE_BYTES( self->v4.bls_pubkey_compressed, FD_BLS_PUBKEY_COMPRESSED_SZ, &out, &out_sz );
       }
 
-      /* Votes (v4 wire format is LandedVote, includes latency) */
       CHECK( !ser_votes( self->v4.votes, 0, &out, &out_sz ) );
-
-      /* Root slot */
       CHECK( !ser_root_slot( self->v4.has_root_slot, self->v4.root_slot, &out, &out_sz ) );
-
-      /* Authorized voters */
       CHECK( !ser_authorized_voters( self->v4.authorized_voters.pool, self->v4.authorized_voters.treap, &out, &out_sz ) );
-
-      /* Epoch credits (v4 has no prior_voters) */
-      CHECK( !ser_epoch_credits( self->v4.epoch_credits, &out, &out_sz ) );
-
-      /* Last timestamp */
+      CHECK( !ser_epoch_credits( self->v4.epoch_credits, &out, &out_sz ) ); /* v4 has no prior_voters */
       WRITE_BYTES( &self->v4.last_timestamp, sizeof(fd_vote_block_timestamp_t), &out, &out_sz );
       break;
     }
