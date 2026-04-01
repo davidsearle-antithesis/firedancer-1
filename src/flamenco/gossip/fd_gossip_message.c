@@ -113,9 +113,7 @@
 static int
 deser_vote_instruction( uchar const * data,
                         ulong         data_len ) {
-  uchar __attribute__((aligned(alignof(fd_vote_instruction_t)))) buf[ FD_VOTE_INSTRUCTION_FOOTPRINT ];
-
-  fd_vote_instruction_t * vote_instruction = (fd_vote_instruction_t *)buf;
+  fd_vote_instruction_t vote_instruction[1];
   CHECK( fd_vote_instruction_deserialize( vote_instruction, data, data_len ) );
   CHECK(
     vote_instruction->discriminant==fd_vote_instruction_enum_vote ||

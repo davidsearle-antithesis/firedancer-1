@@ -909,15 +909,12 @@ deser_vote_init_v2( fd_vote_init_v2_t * out,
 static int
 deser_vote( fd_vote_t *     out,
             uchar const **  data,
-            ulong *         sz,
-            void **         alloc_mem ) {
+            ulong *         sz ) {
   ulong slots_len;
   READ_U64( slots_len, data, sz );
   CHECK( slots_len<=FD_VOTE_INSTR_MAX_SLOT_NUMS_LEN );
 
-  *alloc_mem = (void *)fd_ulong_align_up( (ulong)*alloc_mem, deq_ulong_align() );
-  out->slots = deq_ulong_join( deq_ulong_new( *alloc_mem, FD_VOTE_INSTR_MAX_SLOT_NUMS_LEN ) );
-  *alloc_mem = (uchar *)*alloc_mem + deq_ulong_footprint( FD_VOTE_INSTR_MAX_SLOT_NUMS_LEN );
+  out->slots = deq_ulong_join( deq_ulong_new( out->slots_mem, FD_VOTE_INSTR_MAX_SLOT_NUMS_LEN ) );
 
   for( ulong i=0UL; i<slots_len; i++ ) {
     ulong * elem = deq_ulong_push_tail_nocopy( out->slots );
@@ -935,15 +932,12 @@ deser_vote( fd_vote_t *     out,
 static int
 deser_vote_state_update( fd_vote_state_update_t * out,
                          uchar const **           data,
-                         ulong *                  sz,
-                         void **                  alloc_mem ) {
+                         ulong *                  sz ) {
   ulong lockouts_len;
   READ_U64( lockouts_len, data, sz );
   CHECK( lockouts_len<=FD_VOTE_INSTR_MAX_LOCKOUTS_LEN );
 
-  *alloc_mem = (void *)fd_ulong_align_up( (ulong)*alloc_mem, deq_fd_vote_lockout_t_align() );
-  out->lockouts = deq_fd_vote_lockout_t_join( deq_fd_vote_lockout_t_new( *alloc_mem, FD_VOTE_INSTR_MAX_LOCKOUTS_LEN ) );
-  *alloc_mem = (uchar *)*alloc_mem + deq_fd_vote_lockout_t_footprint( FD_VOTE_INSTR_MAX_LOCKOUTS_LEN );
+  out->lockouts = deq_fd_vote_lockout_t_join( deq_fd_vote_lockout_t_new( out->lockouts_mem, FD_VOTE_INSTR_MAX_LOCKOUTS_LEN ) );
 
   for( ulong i=0; i<lockouts_len; i++ ) {
     fd_vote_lockout_t * elem = deq_fd_vote_lockout_t_push_tail_nocopy( out->lockouts );
@@ -969,8 +963,7 @@ deser_vote_state_update( fd_vote_state_update_t * out,
 static int
 deser_compact_vote_state_update( fd_compact_vote_state_update_t * out,
                                  uchar const **                   data,
-                                 ulong *                          sz,
-                                 void **                          alloc_mem ) {
+                                 ulong *                          sz ) {
   READ_U64( out->root, data, sz );
 
   ushort lockouts_len;
@@ -978,9 +971,7 @@ deser_compact_vote_state_update( fd_compact_vote_state_update_t * out,
   CHECK( lockouts_len<=FD_VOTE_INSTR_MAX_LOCKOUT_OFFSETS_LEN );
   out->lockouts_len = lockouts_len;
 
-  *alloc_mem = (void *)fd_ulong_align_up( (ulong)*alloc_mem, FD_LOCKOUT_OFFSET_ALIGN );
-  out->lockouts = (fd_lockout_offset_t *)*alloc_mem;
-  *alloc_mem = (uchar *)*alloc_mem + sizeof(fd_lockout_offset_t) * (ulong)lockouts_len;
+  out->lockouts = (fd_lockout_offset_t *)out->lockouts_mem;
 
   ulong slot = out->root!=ULONG_MAX ? out->root : 0UL;
   for( ushort i=0; i<lockouts_len; i++ ) {
@@ -1008,8 +999,7 @@ deser_compact_vote_state_update( fd_compact_vote_state_update_t * out,
 static int
 deser_tower_sync( fd_tower_sync_t * out,
                   uchar const **    data,
-                  ulong *           sz,
-                  void **           alloc_mem ) {
+                  ulong *           sz ) {
   READ_U64( out->root, data, sz );
   out->has_root = 1;
 
@@ -1023,9 +1013,7 @@ deser_tower_sync( fd_tower_sync_t * out,
   READ_COMPACT_U16( lockout_offsets_len, data, sz );
   CHECK( lockout_offsets_len<=FD_VOTE_INSTR_MAX_LOCKOUT_OFFSETS_LEN );
 
-  *alloc_mem = (void *)fd_ulong_align_up( (ulong)*alloc_mem, deq_fd_vote_lockout_t_align() );
-  out->lockouts = deq_fd_vote_lockout_t_join( deq_fd_vote_lockout_t_new( *alloc_mem, FD_VOTE_INSTR_MAX_LOCKOUT_OFFSETS_LEN ) );
-  *alloc_mem = (uchar *)*alloc_mem + deq_fd_vote_lockout_t_footprint( FD_VOTE_INSTR_MAX_LOCKOUT_OFFSETS_LEN );
+  out->lockouts = deq_fd_vote_lockout_t_join( deq_fd_vote_lockout_t_new( out->lockouts_mem, FD_VOTE_INSTR_MAX_LOCKOUT_OFFSETS_LEN ) );
 
   ulong last_slot = out->root;
   for( ushort i=0; i<lockout_offsets_len; i++ ) {
@@ -1058,8 +1046,7 @@ deser_tower_sync( fd_tower_sync_t * out,
 static int
 deser_vote_authorize_with_seed( fd_vote_authorize_with_seed_args_t * out,
                                 uchar const **                       data,
-                                ulong *                              sz,
-                                void **                              alloc_mem ) {
+                                ulong *                              sz ) {
   CHECK( !deser_vote_authorize( &out->authorization_type, data, sz ) );
   READ_PUBKEY( out->current_authority_derived_key_owner, data, sz );
 
@@ -1067,9 +1054,6 @@ deser_vote_authorize_with_seed( fd_vote_authorize_with_seed_args_t * out,
   READ_U64( seed_len, data, sz );
   CHECK( seed_len<=FD_TXN_MTU );
   out->current_authority_derived_key_seed_len = seed_len;
-
-  out->current_authority_derived_key_seed = (uchar *)*alloc_mem;
-  *alloc_mem = (uchar *)*alloc_mem + seed_len;
 
   READ_BYTES( out->current_authority_derived_key_seed, seed_len, data, sz );
   CHECK( fd_utf8_verify( (char const *)out->current_authority_derived_key_seed, seed_len ) );
@@ -1081,8 +1065,7 @@ deser_vote_authorize_with_seed( fd_vote_authorize_with_seed_args_t * out,
 static int
 deser_vote_authorize_checked_with_seed( fd_vote_authorize_checked_with_seed_args_t * out,
                                         uchar const **                               data,
-                                        ulong *                                      sz,
-                                        void **                                      alloc_mem ) {
+                                        ulong *                                      sz ) {
   CHECK( !deser_vote_authorize( &out->authorization_type, data, sz ) );
   READ_PUBKEY( out->current_authority_derived_key_owner, data, sz );
 
@@ -1090,9 +1073,6 @@ deser_vote_authorize_checked_with_seed( fd_vote_authorize_checked_with_seed_args
   READ_U64( seed_len, data, sz );
   CHECK( seed_len<=FD_TXN_MTU );
   out->current_authority_derived_key_seed_len = seed_len;
-
-  out->current_authority_derived_key_seed = (uchar *)*alloc_mem;
-  *alloc_mem = (uchar *)*alloc_mem + seed_len;
 
   READ_BYTES( out->current_authority_derived_key_seed, seed_len, data, sz );
   CHECK( fd_utf8_verify( (char const *)out->current_authority_derived_key_seed, seed_len ) );
@@ -1112,87 +1092,84 @@ fd_vote_instruction_deserialize_inner( fd_vote_instruction_t * instruction,
   uchar const ** p  = &data;
   ulong *        sz = &data_sz;
 
-  /* Dynamic allocations (deques, strings) go after the struct. */
-  void * alloc_mem = (uchar *)instruction + sizeof(fd_vote_instruction_t);
-
   READ_U32( instruction->discriminant, p, sz );
 
   switch( instruction->discriminant ) {
 
     case fd_vote_instruction_enum_initialize_account:
-      return deser_vote_init( &instruction->inner.initialize_account, p, sz );
+      return deser_vote_init( &instruction->initialize_account, p, sz );
 
     case fd_vote_instruction_enum_authorize: {
-      READ_PUBKEY( instruction->inner.authorize.pubkey, p, sz );
-      return deser_vote_authorize( &instruction->inner.authorize.vote_authorize, p, sz );
+      READ_PUBKEY( instruction->authorize.pubkey, p, sz );
+      return deser_vote_authorize( &instruction->authorize.vote_authorize, p, sz );
     }
 
     case fd_vote_instruction_enum_vote:
-      return deser_vote( &instruction->inner.vote, p, sz, &alloc_mem );
+      return deser_vote( &instruction->vote, p, sz );
 
     case fd_vote_instruction_enum_withdraw:
-      READ_U64( instruction->inner.withdraw, p, sz );
+      READ_U64( instruction->withdraw, p, sz );
       return 0;
 
     case fd_vote_instruction_enum_update_validator_identity:
       return 0;
 
     case fd_vote_instruction_enum_update_commission:
-      READ_U8( instruction->inner.update_commission, p, sz );
+      READ_U8( instruction->update_commission, p, sz );
       return 0;
 
     case fd_vote_instruction_enum_vote_switch:
-      CHECK( !deser_vote( &instruction->inner.vote_switch.vote, p, sz, &alloc_mem ) );
-      READ_HASH( instruction->inner.vote_switch.hash, p, sz );
+      CHECK( !deser_vote( &instruction->vote_switch.vote, p, sz ) );
+      READ_HASH( instruction->vote_switch.hash, p, sz );
       return 0;
 
     case fd_vote_instruction_enum_authorize_checked:
-      return deser_vote_authorize( &instruction->inner.authorize_checked, p, sz );
+      return deser_vote_authorize( &instruction->authorize_checked, p, sz );
 
     case fd_vote_instruction_enum_update_vote_state:
-      return deser_vote_state_update( &instruction->inner.update_vote_state, p, sz, &alloc_mem );
+      return deser_vote_state_update( &instruction->update_vote_state, p, sz );
 
     case fd_vote_instruction_enum_update_vote_state_switch:
-      CHECK( !deser_vote_state_update( &instruction->inner.update_vote_state_switch.vote_state_update, p, sz, &alloc_mem ) );
-      READ_HASH( instruction->inner.update_vote_state_switch.hash, p, sz );
+      CHECK( !deser_vote_state_update( &instruction->update_vote_state_switch.vote_state_update, p, sz ) );
+      READ_HASH( instruction->update_vote_state_switch.hash, p, sz );
       return 0;
 
     case fd_vote_instruction_enum_authorize_with_seed:
-      return deser_vote_authorize_with_seed( &instruction->inner.authorize_with_seed, p, sz, &alloc_mem );
+      return deser_vote_authorize_with_seed( &instruction->authorize_with_seed, p, sz );
 
     case fd_vote_instruction_enum_authorize_checked_with_seed:
-      return deser_vote_authorize_checked_with_seed( &instruction->inner.authorize_checked_with_seed, p, sz, &alloc_mem );
+      return deser_vote_authorize_checked_with_seed( &instruction->authorize_checked_with_seed, p, sz );
 
     case fd_vote_instruction_enum_compact_update_vote_state:
-      return deser_compact_vote_state_update( &instruction->inner.compact_update_vote_state, p, sz, &alloc_mem );
+      return deser_compact_vote_state_update( &instruction->compact_update_vote_state, p, sz );
 
     case fd_vote_instruction_enum_compact_update_vote_state_switch:
-      CHECK( !deser_compact_vote_state_update( &instruction->inner.compact_update_vote_state_switch.compact_vote_state_update, p, sz, &alloc_mem ) );
-      READ_HASH( instruction->inner.compact_update_vote_state_switch.hash, p, sz );
+      CHECK( !deser_compact_vote_state_update( &instruction->compact_update_vote_state_switch.compact_vote_state_update, p, sz ) );
+      READ_HASH( instruction->compact_update_vote_state_switch.hash, p, sz );
       return 0;
 
     case fd_vote_instruction_enum_tower_sync:
-      return deser_tower_sync( &instruction->inner.tower_sync, p, sz, &alloc_mem );
+      return deser_tower_sync( &instruction->tower_sync, p, sz );
 
     case fd_vote_instruction_enum_tower_sync_switch:
-      CHECK( !deser_tower_sync( &instruction->inner.tower_sync_switch.tower_sync, p, sz, &alloc_mem ) );
-      READ_HASH( instruction->inner.tower_sync_switch.hash, p, sz );
+      CHECK( !deser_tower_sync( &instruction->tower_sync_switch.tower_sync, p, sz ) );
+      READ_HASH( instruction->tower_sync_switch.hash, p, sz );
       return 0;
 
     case fd_vote_instruction_enum_initialize_account_v2:
-      return deser_vote_init_v2( &instruction->inner.initialize_account_v2, p, sz );
+      return deser_vote_init_v2( &instruction->initialize_account_v2, p, sz );
 
     case fd_vote_instruction_enum_update_commission_collector:
-      READ_ENUM( instruction->inner.update_commission_collector.discriminant, 2U, p, sz );
+      READ_ENUM( instruction->update_commission_collector.discriminant, 2U, p, sz );
       return 0;
 
     case fd_vote_instruction_enum_update_commission_bps:
-      READ_U16( instruction->inner.update_commission_bps.commission_bps, p, sz );
-      READ_ENUM( instruction->inner.update_commission_bps.kind.discriminant, 2U, p, sz );
+      READ_U16( instruction->update_commission_bps.commission_bps, p, sz );
+      READ_ENUM( instruction->update_commission_bps.kind.discriminant, 2U, p, sz );
       return 0;
 
     case fd_vote_instruction_enum_deposit_delegator_rewards:
-      READ_U64( instruction->inner.deposit_delegator_rewards.deposit, p, sz );
+      READ_U64( instruction->deposit_delegator_rewards.deposit, p, sz );
       return 0;
 
     default:

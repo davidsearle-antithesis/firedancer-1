@@ -81,7 +81,17 @@
 #define FD_VOTE_INSTR_MAX_LOCKOUTS_LEN         (102UL)
 #define FD_VOTE_INSTR_MAX_LOCKOUT_OFFSETS_LEN  (616UL)
 #define FD_VOTE_INSTR_MAX_SLOT_NUMS_LEN        (154UL)
-#define FD_VOTE_INSTR_LOCKOUT_OFFSET_FOOTPRINT (9856UL)
+
+/* Footprints for embedded memory arrays inside vote instruction
+   sub-structs.  Validated by test_vote_instruction_footprints
+   in test_vote_program. */
+#define FD_VOTE_INSTR_SLOTS_ALIGN               (8UL)
+#define FD_VOTE_INSTR_SLOTS_FOOTPRINT           (1264UL)
+#define FD_VOTE_INSTR_UPDATE_LOCKOUTS_ALIGN     (8UL)
+#define FD_VOTE_INSTR_UPDATE_LOCKOUTS_FOOTPRINT (1664UL)
+#define FD_VOTE_INSTR_LOCKOUT_OFFSET_ALIGN      (8UL)
+#define FD_VOTE_INSTR_LOCKOUT_OFFSET_FOOTPRINT  (9856UL)
+#define FD_VOTE_INSTR_SEED_MAX                  (1232UL)
 
 /* Footprints for runtime buffers that hold lockouts / landed votes
    derived from vote instruction data.  The max element count is
@@ -369,10 +379,10 @@ struct fd_vote_state_versioned {
   };
 
   /* Memory for dynamic sub-structures */
-  uchar landed_votes_mem            [ FD_LANDED_VOTES_FOOTPRINT           ] __attribute__((aligned( FD_LANDED_VOTES_ALIGN )));
-  uchar epoch_credits_mem           [ FD_EPOCH_CREDITS_FOOTPRINT          ] __attribute__((aligned( FD_EPOCH_CREDITS_ALIGN )));
-  uchar authorized_voters_pool_mem  [ FD_AUTHORIZED_VOTERS_POOL_FOOTPRINT ] __attribute__((aligned( FD_AUTHORIZED_VOTERS_POOL_ALIGN )));
-  uchar authorized_voters_treap_mem [ FD_AUTHORIZED_VOTERS_TREAP_FOOTPRINT] __attribute__((aligned( FD_AUTHORIZED_VOTERS_TREAP_ALIGN )));
+  uchar landed_votes_mem            [ FD_LANDED_VOTES_FOOTPRINT           ] __attribute__((aligned(FD_LANDED_VOTES_ALIGN)));
+  uchar epoch_credits_mem           [ FD_EPOCH_CREDITS_FOOTPRINT          ] __attribute__((aligned(FD_EPOCH_CREDITS_ALIGN)));
+  uchar authorized_voters_pool_mem  [ FD_AUTHORIZED_VOTERS_POOL_FOOTPRINT ] __attribute__((aligned(FD_AUTHORIZED_VOTERS_POOL_ALIGN)));
+  uchar authorized_voters_treap_mem [ FD_AUTHORIZED_VOTERS_TREAP_FOOTPRINT] __attribute__((aligned(FD_AUTHORIZED_VOTERS_TREAP_ALIGN)));
 };
 typedef struct fd_vote_state_versioned fd_vote_state_versioned_t;
 
@@ -400,6 +410,7 @@ struct fd_vote {
   fd_hash_t hash;
   long      timestamp;
   uchar     has_timestamp;
+  uchar     slots_mem[ FD_VOTE_INSTR_SLOTS_FOOTPRINT ] __attribute__((aligned(FD_VOTE_INSTR_SLOTS_ALIGN)));
 };
 typedef struct fd_vote fd_vote_t;
 #define FD_VOTE_ALIGN alignof(fd_vote_t)
@@ -428,6 +439,7 @@ struct fd_vote_state_update {
   fd_hash_t           hash;
   long                timestamp;
   uchar               has_timestamp;
+  uchar               lockouts_mem[ FD_VOTE_INSTR_UPDATE_LOCKOUTS_FOOTPRINT ] __attribute__((aligned(FD_VOTE_INSTR_UPDATE_LOCKOUTS_ALIGN)));
 };
 typedef struct fd_vote_state_update fd_vote_state_update_t;
 #define FD_VOTE_STATE_UPDATE_ALIGN alignof(fd_vote_state_update_t)
@@ -447,6 +459,7 @@ struct fd_compact_vote_state_update {
   fd_hash_t             hash;
   long                  timestamp;
   uchar                 has_timestamp;
+  uchar                 lockouts_mem[ FD_VOTE_INSTR_LOCKOUT_OFFSET_FOOTPRINT ] __attribute__((aligned(FD_VOTE_INSTR_LOCKOUT_OFFSET_ALIGN)));
 };
 typedef struct fd_compact_vote_state_update fd_compact_vote_state_update_t;
 #define FD_COMPACT_VOTE_STATE_UPDATE_ALIGN alignof(fd_compact_vote_state_update_t)
@@ -469,6 +482,7 @@ struct fd_tower_sync {
   long                timestamp;
   uchar               has_timestamp;
   fd_hash_t           block_id;
+  uchar               lockouts_mem[ FD_VOTE_INSTR_LOCKOUTS_FOOTPRINT ] __attribute__((aligned(FD_VOTE_INSTR_LOCKOUTS_ALIGN)));
 };
 typedef struct fd_tower_sync fd_tower_sync_t;
 #define FD_TOWER_SYNC_ALIGN alignof(fd_tower_sync_t)
@@ -486,7 +500,7 @@ struct fd_vote_authorize_with_seed_args {
   fd_vote_authorize_t authorization_type;
   fd_pubkey_t         current_authority_derived_key_owner;
   ulong               current_authority_derived_key_seed_len;
-  uchar *             current_authority_derived_key_seed;
+  uchar               current_authority_derived_key_seed[ FD_VOTE_INSTR_SEED_MAX ];
   fd_pubkey_t         new_authority;
 };
 typedef struct fd_vote_authorize_with_seed_args fd_vote_authorize_with_seed_args_t;
@@ -497,7 +511,7 @@ struct fd_vote_authorize_checked_with_seed_args {
   fd_vote_authorize_t authorization_type;
   fd_pubkey_t         current_authority_derived_key_owner;
   ulong               current_authority_derived_key_seed_len;
-  uchar *             current_authority_derived_key_seed;
+  uchar               current_authority_derived_key_seed[ FD_VOTE_INSTR_SEED_MAX ];
 };
 typedef struct fd_vote_authorize_checked_with_seed_args fd_vote_authorize_checked_with_seed_args_t;
 #define FD_VOTE_AUTHORIZE_CHECKED_WITH_SEED_ARGS_ALIGN alignof(fd_vote_authorize_checked_with_seed_args_t)
@@ -531,37 +545,32 @@ typedef struct fd_deposit_delegator_rewards_args fd_deposit_delegator_rewards_ar
 /* Vote instruction (discriminated union)                             */
 /**********************************************************************/
 
-union fd_vote_instruction_inner {
-  fd_vote_init_t                             initialize_account;
-  fd_vote_authorize_pubkey_t                 authorize;
-  fd_vote_t                                  vote;
-  ulong                                      withdraw;
-  uchar                                      update_commission;
-  fd_vote_switch_t                           vote_switch;
-  fd_vote_authorize_t                        authorize_checked;
-  fd_vote_state_update_t                     update_vote_state;
-  fd_update_vote_state_switch_t              update_vote_state_switch;
-  fd_vote_authorize_with_seed_args_t         authorize_with_seed;
-  fd_vote_authorize_checked_with_seed_args_t authorize_checked_with_seed;
-  fd_compact_vote_state_update_t             compact_update_vote_state;
-  fd_compact_vote_state_update_switch_t      compact_update_vote_state_switch;
-  fd_tower_sync_t                            tower_sync;
-  fd_tower_sync_switch_t                     tower_sync_switch;
-  fd_vote_init_v2_t                          initialize_account_v2;
-  fd_commission_kind_t                       update_commission_collector;
-  fd_update_commission_bps_args_t            update_commission_bps;
-  fd_deposit_delegator_rewards_args_t        deposit_delegator_rewards;
-};
-typedef union fd_vote_instruction_inner fd_vote_instruction_inner_t;
-
 /* https://github.com/firedancer-io/solana/blob/53a4e5d6c58b2ffe89b09304e4437f8ca198dadd/programs/vote/src/vote_instruction.rs#L21 */
 struct fd_vote_instruction {
-  uint                        discriminant;
-  fd_vote_instruction_inner_t inner;
+  uint discriminant;
+  union {
+    fd_vote_init_t                             initialize_account;
+    fd_vote_authorize_pubkey_t                 authorize;
+    fd_vote_t                                  vote;
+    ulong                                      withdraw;
+    uchar                                      update_commission;
+    fd_vote_switch_t                           vote_switch;
+    fd_vote_authorize_t                        authorize_checked;
+    fd_vote_state_update_t                     update_vote_state;
+    fd_update_vote_state_switch_t              update_vote_state_switch;
+    fd_vote_authorize_with_seed_args_t         authorize_with_seed;
+    fd_vote_authorize_checked_with_seed_args_t authorize_checked_with_seed;
+    fd_compact_vote_state_update_t             compact_update_vote_state;
+    fd_compact_vote_state_update_switch_t      compact_update_vote_state_switch;
+    fd_tower_sync_t                            tower_sync;
+    fd_tower_sync_switch_t                     tower_sync_switch;
+    fd_vote_init_v2_t                          initialize_account_v2;
+    fd_commission_kind_t                       update_commission_collector;
+    fd_update_commission_bps_args_t            update_commission_bps;
+    fd_deposit_delegator_rewards_args_t        deposit_delegator_rewards;
+  };
 };
 typedef struct fd_vote_instruction fd_vote_instruction_t;
-#define FD_VOTE_INSTRUCTION_ALIGN     alignof(fd_vote_instruction_t)
-#define FD_VOTE_INSTRUCTION_FOOTPRINT (sizeof(fd_vote_instruction_t)+FD_VOTE_INSTR_LOCKOUT_OFFSET_FOOTPRINT)
 
 enum {
   fd_vote_instruction_enum_initialize_account               = 0,
@@ -668,10 +677,9 @@ fd_vote_account_epoch_credits( uchar const * data,
                                ulong *       cnt );
 
 /* fd_vote_instruction_deserialize deserializes a vote instruction from
-   bincode-encoded data into the provided instruction struct.  The
-   instruction struct and any dynamic data (deques, strings) are placed
-   within the provided memory region.  mem must be at least
-   FD_VOTE_INSTRUCTION_FOOTPRINT bytes.
+   bincode-encoded data into the provided instruction struct.  Dynamic
+   data (deques, arrays) is placed in memory embedded within the
+   sub-structs of instruction.
 
    On success returns instruction.  Returns NULL on failure (malformed
    data). */

@@ -588,16 +588,22 @@ test_epoch_credits_footprint( void ) {
 }
 
 static void
-test_landed_votes_footprint_instr( void ) {
+test_vote_instruction_footprints( void ) {
+  FD_TEST( FD_VOTE_INSTR_SLOTS_ALIGN == deq_ulong_align() );
+  FD_TEST( FD_VOTE_INSTR_SLOTS_FOOTPRINT == deq_ulong_footprint( FD_VOTE_INSTR_MAX_SLOT_NUMS_LEN ) );
+
+  FD_TEST( FD_VOTE_INSTR_UPDATE_LOCKOUTS_ALIGN == deq_fd_vote_lockout_t_align() );
+  FD_TEST( FD_VOTE_INSTR_UPDATE_LOCKOUTS_FOOTPRINT == deq_fd_vote_lockout_t_footprint( FD_VOTE_INSTR_MAX_LOCKOUTS_LEN ) );
+
+  FD_TEST( FD_VOTE_INSTR_LOCKOUT_OFFSET_ALIGN == alignof(fd_lockout_offset_t) );
+  FD_TEST( FD_VOTE_INSTR_LOCKOUT_OFFSET_FOOTPRINT == sizeof(fd_lockout_offset_t) * FD_VOTE_INSTR_MAX_LOCKOUT_OFFSETS_LEN );
+
+  FD_TEST( FD_VOTE_INSTR_SEED_MAX == FD_TXN_MTU );
+
   FD_TEST( FD_VOTE_INSTR_LANDED_VOTES_ALIGN == deq_fd_landed_vote_t_align() );
+  FD_TEST( FD_VOTE_INSTR_LANDED_VOTES_FOOTPRINT == deq_fd_landed_vote_t_footprint( FD_VOTE_INSTR_MAX_LOCKOUT_OFFSETS_LEN ) );
 
-  ulong required = deq_fd_landed_vote_t_footprint( FD_VOTE_INSTR_MAX_LOCKOUT_OFFSETS_LEN );
-
-  FD_LOG_NOTICE(( "landed votes required: %lu, FD_VOTE_INSTR_LANDED_VOTES_FOOTPRINT: %lu",
-                   required, (ulong)FD_VOTE_INSTR_LANDED_VOTES_FOOTPRINT ));
-  FD_TEST( required == FD_VOTE_INSTR_LANDED_VOTES_FOOTPRINT );
-
-  FD_LOG_NOTICE(( "test_landed_votes_footprint_instr... ok" ));
+  FD_LOG_NOTICE(( "test_vote_instruction_footprints... ok" ));
 }
 
 int
@@ -632,7 +638,7 @@ main( int     argc,
   test_vote_lockouts_footprint();
   test_landed_votes_footprint();
   test_epoch_credits_footprint();
-  test_landed_votes_footprint_instr();
+  test_vote_instruction_footprints();
 
   FD_LOG_NOTICE(( "pass" ));
   fd_halt();

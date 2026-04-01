@@ -766,7 +766,7 @@ authorize( fd_exec_instr_ctx_t *         ctx,
            fd_borrowed_account_t *       vote_account,
            int                           target_version,
            fd_pubkey_t const *           authorized,
-           fd_vote_authorize_t           vote_authorize,
+           fd_vote_authorize_t const *   vote_authorize,
            fd_pubkey_t const *           signers[static FD_TXN_SIG_MAX],
            ulong                         signers_cnt,
            fd_sol_sysvar_clock_t const * clock,
@@ -778,7 +778,7 @@ authorize( fd_exec_instr_ctx_t *         ctx,
   if( FD_UNLIKELY( rc ) ) return rc;
 
   /* https://github.com/anza-xyz/agave/blob/v3.1.1/programs/vote/src/vote_state/mod.rs#L729-L756 */
-  switch( vote_authorize.discriminant ) {
+  switch( vote_authorize->discriminant ) {
 
     /* https://github.com/anza-xyz/agave/blob/v3.1.1/programs/vote/src/vote_state/mod.rs#L730-L750 */
     case fd_vote_authorize_enum_voter: {
@@ -848,8 +848,8 @@ authorize( fd_exec_instr_ctx_t *         ctx,
       rc = fd_vote_verify_bls_proof_of_possession(
         ctx,
         vote_account->pubkey->uc,
-        vote_authorize.voter_with_bls.bls_pubkey,
-        vote_authorize.voter_with_bls.bls_proof_of_possession
+        vote_authorize->voter_with_bls.bls_pubkey,
+        vote_authorize->voter_with_bls.bls_proof_of_possession
       );
       if( FD_UNLIKELY( rc ) ) {
         return rc;
@@ -869,7 +869,7 @@ authorize( fd_exec_instr_ctx_t *         ctx,
           authorized,
           clock->epoch,
           target_epoch,
-          vote_authorize.voter_with_bls.bls_pubkey,
+          vote_authorize->voter_with_bls.bls_pubkey,
           authorized_withdrawer_signer,
           signers,
           signers_cnt
@@ -880,7 +880,7 @@ authorize( fd_exec_instr_ctx_t *         ctx,
     }
 
     default:
-      FD_LOG_CRIT(( "unsupported vote_authorize discriminant: %u", vote_authorize.discriminant ));
+      FD_LOG_CRIT(( "unsupported vote_authorize discriminant: %u", vote_authorize->discriminant ));
   }
 
   /* https://github.com/anza-xyz/agave/blob/v3.1.1/programs/vote/src/vote_state/mod.rs#L758 */
@@ -1534,15 +1534,15 @@ fd_vote_decode_compact_update( fd_compact_vote_state_update_t * compact_update,
 /* https://github.com/anza-xyz/agave/blob/v2.0.1/programs/vote/src/vote_processor.rs#L21-L51 */
 static int
 process_authorize_with_seed_instruction( /* invoke_context */
-                                         fd_exec_instr_ctx_t *   ctx,
-                                         int                     target_version,
-                                         fd_borrowed_account_t * vote_account,
-                                         fd_pubkey_t const *     new_authority,
-                                         fd_vote_authorize_t     authorization_type,
-                                         fd_pubkey_t const *     current_authority_derived_key_owner,
-                                         uchar const *           current_authority_derived_key_seed,
-                                         ulong                   current_authority_derived_key_seed_len,
-                                         int                     is_vote_authorize_with_bls_enabled ) {
+                                         fd_exec_instr_ctx_t *       ctx,
+                                         int                         target_version,
+                                         fd_borrowed_account_t *     vote_account,
+                                         fd_pubkey_t const *         new_authority,
+                                         fd_vote_authorize_t const * authorization_type,
+                                         fd_pubkey_t const *         current_authority_derived_key_owner,
+                                         uchar const *               current_authority_derived_key_seed,
+                                         ulong                       current_authority_derived_key_seed_len,
+                                         int                         is_vote_authorize_with_bls_enabled ) {
   int rc = 0;
 
   /* https://github.com/anza-xyz/agave/blob/v2.0.1/programs/vote/src/vote_processor.rs#L31 */
@@ -1645,13 +1645,8 @@ fd_vote_program_execute( fd_exec_instr_ctx_t * ctx ) {
       block_revenue_sharing &&
       vote_account_initialize_v2;
 
-  uchar __attribute__((aligned(alignof(fd_vote_instruction_t)))) vote_instruction_mem[ FD_VOTE_INSTRUCTION_FOOTPRINT ];
-  fd_vote_instruction_t * instruction = fd_vote_instruction_deserialize(
-    (fd_vote_instruction_t *)vote_instruction_mem,
-    ctx->instr->data,
-    fd_ulong_min( ctx->instr->data_sz, FD_TXN_MTU )
-  );
-  if( FD_UNLIKELY( !instruction ) ) {
+  fd_vote_instruction_t instruction[1];
+  if( FD_UNLIKELY( !fd_vote_instruction_deserialize( instruction, ctx->instr->data, fd_ulong_min( ctx->instr->data_sz, FD_TXN_MTU ) ) ) ) {
     return FD_EXECUTOR_INSTR_ERR_INVALID_INSTR_DATA;
   }
 
@@ -1687,7 +1682,7 @@ fd_vote_program_execute( fd_exec_instr_ctx_t * ctx ) {
     if( FD_UNLIKELY( !clock ) ) return FD_EXECUTOR_INSTR_ERR_UNSUPPORTED_SYSVAR;
 
     // https://github.com/anza-xyz/agave/blob/v2.0.1/programs/vote/src/vote_processor.rs#L78
-    rc = initialize_account( ctx, &me, target_version, &instruction->inner.initialize_account, signers, signers_cnt, clock );
+    rc = initialize_account( ctx, &me, target_version, &instruction->initialize_account, signers, signers_cnt, clock );
 
     break;
   }
@@ -1704,9 +1699,7 @@ fd_vote_program_execute( fd_exec_instr_ctx_t * ctx ) {
    * - Up to two signers: the vote authority and the authorized withdrawer.
    */
   case fd_vote_instruction_enum_authorize: {
-    fd_pubkey_t const * voter_pubkey   = &instruction->inner.authorize.pubkey;
-    fd_vote_authorize_t vote_authorize = instruction->inner.authorize.vote_authorize;
-
+    fd_pubkey_t const * voter_pubkey   = &instruction->authorize.pubkey;
     // https://github.com/anza-xyz/agave/blob/v2.0.1/programs/vote/src/vote_processor.rs#L87
     rc = fd_sysvar_instr_acct_check( ctx, 1, &fd_sysvar_clock_id );
     if( FD_UNLIKELY( rc ) ) return rc;
@@ -1714,7 +1707,7 @@ fd_vote_program_execute( fd_exec_instr_ctx_t * ctx ) {
     fd_sol_sysvar_clock_t const * clock = fd_sysvar_cache_clock_read( ctx->sysvar_cache, &clock_ );
     if( FD_UNLIKELY( !clock ) ) return FD_EXECUTOR_INSTR_ERR_UNSUPPORTED_SYSVAR;
 
-    rc = authorize( ctx, &me, target_version, voter_pubkey, vote_authorize, signers, signers_cnt, clock, is_vote_authorize_with_bls_enabled );
+    rc = authorize( ctx, &me, target_version, voter_pubkey, &instruction->authorize.vote_authorize, signers, signers_cnt, clock, is_vote_authorize_with_bls_enabled );
 
     break;
   }
@@ -1728,7 +1721,7 @@ fd_vote_program_execute( fd_exec_instr_ctx_t * ctx ) {
    * https://github.com/anza-xyz/agave/blob/v2.0.1/programs/vote/src/vote_processor.rs#L98
    */
   case fd_vote_instruction_enum_authorize_with_seed: {
-    fd_vote_authorize_with_seed_args_t * args = &instruction->inner.authorize_with_seed;
+    fd_vote_authorize_with_seed_args_t * args = &instruction->authorize_with_seed;
 
     // https://github.com/anza-xyz/agave/blob/v2.0.1/programs/vote/src/vote_processor.rs#L99
     if( FD_UNLIKELY( ctx->instr->acct_cnt < 3 ) ) {
@@ -1741,7 +1734,7 @@ fd_vote_program_execute( fd_exec_instr_ctx_t * ctx ) {
         target_version,
         &me,
         &args->new_authority,
-        args->authorization_type,
+        &args->authorization_type,
         &args->current_authority_derived_key_owner,
         args->current_authority_derived_key_seed,
         args->current_authority_derived_key_seed_len,
@@ -1760,7 +1753,7 @@ fd_vote_program_execute( fd_exec_instr_ctx_t * ctx ) {
    * https://github.com/anza-xyz/agave/blob/v2.0.1/programs/vote/src/vote_processor.rs#L111
    */
   case fd_vote_instruction_enum_authorize_checked_with_seed: {
-    fd_vote_authorize_checked_with_seed_args_t const * args = &instruction->inner.authorize_checked_with_seed;
+    fd_vote_authorize_checked_with_seed_args_t const * args = &instruction->authorize_checked_with_seed;
 
     // https://github.com/anza-xyz/agave/blob/v2.0.1/programs/vote/src/vote_processor.rs#L112
     if( FD_UNLIKELY( ctx->instr->acct_cnt < 4 ) ) {
@@ -1788,7 +1781,7 @@ fd_vote_program_execute( fd_exec_instr_ctx_t * ctx ) {
         target_version,
         &me,
         new_authority,
-        args->authorization_type,
+        &args->authorization_type,
         &args->current_authority_derived_key_owner,
         args->current_authority_derived_key_seed,
         args->current_authority_derived_key_seed_len,
@@ -1845,7 +1838,7 @@ fd_vote_program_execute( fd_exec_instr_ctx_t * ctx ) {
         ctx,
         target_version,
         &me,
-        instruction->inner.update_commission,
+        instruction->update_commission,
         signers,
         signers_cnt,
         epoch_schedule,
@@ -1881,9 +1874,9 @@ fd_vote_program_execute( fd_exec_instr_ctx_t * ctx ) {
 
     fd_vote_t * vote;
     if( instruction->discriminant == fd_vote_instruction_enum_vote ) {
-      vote = &instruction->inner.vote;
+      vote = &instruction->vote;
     } else if( instruction->discriminant == fd_vote_instruction_enum_vote_switch ) {
-      vote = &instruction->inner.vote_switch.vote;
+      vote = &instruction->vote_switch.vote;
     } else {
       FD_LOG_CRIT(( "unsupported instruction discriminant: %u", instruction->discriminant ));
     }
@@ -1946,10 +1939,10 @@ fd_vote_program_execute( fd_exec_instr_ctx_t * ctx ) {
     fd_vote_state_update_t * vote_state_update;
     switch( instruction->discriminant ) {
     case fd_vote_instruction_enum_update_vote_state:
-      vote_state_update = &instruction->inner.update_vote_state;
+      vote_state_update = &instruction->update_vote_state;
       break;
     case fd_vote_instruction_enum_update_vote_state_switch:
-      vote_state_update = &instruction->inner.update_vote_state_switch.vote_state_update;
+      vote_state_update = &instruction->update_vote_state_switch.vote_state_update;
       break;
     default:
       FD_LOG_CRIT(( "unsupported instruction discriminant: %u", instruction->discriminant ));
@@ -2015,11 +2008,11 @@ fd_vote_program_execute( fd_exec_instr_ctx_t * ctx ) {
 
     fd_compact_vote_state_update_t * vote_state_update = NULL;
     if( instruction->discriminant == fd_vote_instruction_enum_compact_update_vote_state ) {
-      vote_state_update = &instruction->inner.compact_update_vote_state;
+      vote_state_update = &instruction->compact_update_vote_state;
     } else if( instruction->discriminant ==
                fd_vote_instruction_enum_compact_update_vote_state_switch ) {
       vote_state_update =
-          &instruction->inner.compact_update_vote_state_switch.compact_vote_state_update;
+          &instruction->compact_update_vote_state_switch.compact_vote_state_update;
     }
 
     fd_vote_state_update_t vote_update = {0};
@@ -2065,8 +2058,8 @@ fd_vote_program_execute( fd_exec_instr_ctx_t * ctx ) {
   case fd_vote_instruction_enum_tower_sync:
   case fd_vote_instruction_enum_tower_sync_switch: {
     fd_tower_sync_t * tower_sync = (instruction->discriminant == fd_vote_instruction_enum_tower_sync)
-        ? &instruction->inner.tower_sync
-        : &instruction->inner.tower_sync_switch.tower_sync;
+        ? &instruction->tower_sync
+        : &instruction->tower_sync_switch.tower_sync;
 
     if( FD_UNLIKELY( !fd_sysvar_cache_slot_hashes_is_valid( ctx->sysvar_cache ) ) ) {
       return FD_EXECUTOR_INSTR_ERR_UNSUPPORTED_SYSVAR;
@@ -2121,7 +2114,7 @@ fd_vote_program_execute( fd_exec_instr_ctx_t * ctx ) {
         ctx,
         &me,
         target_version,
-        instruction->inner.withdraw,
+        instruction->withdraw,
         1UL,
         signers,
         signers_cnt,
@@ -2176,7 +2169,7 @@ fd_vote_program_execute( fd_exec_instr_ctx_t * ctx ) {
         &me,
         target_version,
         voter_pubkey,
-        instruction->inner.authorize_checked,
+        &instruction->authorize_checked,
         signers,
         signers_cnt,
         clock,
@@ -2219,7 +2212,7 @@ fd_vote_program_execute( fd_exec_instr_ctx_t * ctx ) {
     fd_sol_sysvar_clock_t const * clock = fd_sysvar_cache_clock_read( ctx->sysvar_cache, &clock_ );
     if( FD_UNLIKELY( !clock ) ) return FD_EXECUTOR_INSTR_ERR_UNSUPPORTED_SYSVAR;
 
-    rc = initialize_account_v2( ctx, &me, target_version, &instruction->inner.initialize_account_v2, signers, signers_cnt, clock );
+    rc = initialize_account_v2( ctx, &me, target_version, &instruction->initialize_account_v2, signers, signers_cnt, clock );
 
     break;
   }
