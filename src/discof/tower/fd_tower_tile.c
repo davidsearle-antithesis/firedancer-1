@@ -678,7 +678,7 @@ deser_auth_vtr( fd_tower_tile_t * ctx,
   if( FD_UNLIKELY( !vote_acc_found ) ) return 0;
 
   fd_vote_state_versioned_t vsv[1];
-  FD_CRIT( !fd_vote_state_versioned_deserialize( vsv, ctx->our_vote_acct, ctx->our_vote_acct_sz ), "unable to decode vote state versioned" );
+  FD_CRIT( fd_vote_state_versioned_deserialize( vsv, ctx->our_vote_acct, ctx->our_vote_acct_sz ), "unable to decode vote state versioned" );
 
   fd_pubkey_t const * auth_vtr_addr = NULL;
   switch( vsv->kind ) {

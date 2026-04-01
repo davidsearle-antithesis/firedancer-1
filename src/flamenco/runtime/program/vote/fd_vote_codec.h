@@ -96,14 +96,6 @@
 /* Constants -- vote account state footprints                         */
 /**********************************************************************/
 
-/* The vote state versioned struct embeds all dynamic sub-structure
-   memory inline (votes deque, epoch_credits deque, authorized_voters
-   pool and treap).  Alignment and footprint are therefore determined
-   by the struct layout itself.  The pool_mem member carries 128-byte
-   alignment, which dominates. */
-#define FD_VOTE_STATE_VERSIONED_ALIGN     alignof(fd_vote_state_versioned_t)
-#define FD_VOTE_STATE_VERSIONED_FOOTPRINT sizeof(fd_vote_state_versioned_t)
-
 /* Alignments and footprints for the authorized voters pool and treap at
    MAX_AUTHORIZED_VOTERS_CAPACITY.  Validated by
    test_authorized_voters_footprint in test_vote_program. */
@@ -609,9 +601,9 @@ fd_vote_state_versioned_new( fd_vote_state_versioned_t * self,
                              uint                        kind );
 
 /* Deserializes the vote state from a bincode-encoded buffer into the
-   provided vote state versioned struct.  On success returns 0 and
-   writes the decoded struct into self.  Returns 1 on failure. */
-int
+   provided vote state versioned struct.  On success returns self.
+   Returns NULL on failure (malformed data). */
+fd_vote_state_versioned_t *
 fd_vote_state_versioned_deserialize( fd_vote_state_versioned_t * self,
                                      uchar const *               payload,
                                      ulong                       payload_sz );
@@ -678,9 +670,10 @@ fd_vote_account_epoch_credits( uchar const * data,
    within the provided memory region.  mem must be at least
    FD_VOTE_INSTRUCTION_FOOTPRINT bytes.
 
-   Returns 0 on success, 1 on failure (malformed data). */
+   On success returns instruction.  Returns NULL on failure (malformed
+   data). */
 
-int
+fd_vote_instruction_t *
 fd_vote_instruction_deserialize( fd_vote_instruction_t * instruction,
                                  uchar const *           data,
                                  ulong                   data_sz );

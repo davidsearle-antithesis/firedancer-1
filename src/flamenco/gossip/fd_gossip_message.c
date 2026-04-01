@@ -116,7 +116,7 @@ deser_vote_instruction( uchar const * data,
   uchar __attribute__((aligned(alignof(fd_vote_instruction_t)))) buf[ FD_VOTE_INSTRUCTION_FOOTPRINT ];
 
   fd_vote_instruction_t * vote_instruction = (fd_vote_instruction_t *)buf;
-  CHECK( !fd_vote_instruction_deserialize( vote_instruction, data, data_len ) );
+  CHECK( fd_vote_instruction_deserialize( vote_instruction, data, data_len ) );
   CHECK(
     vote_instruction->discriminant==fd_vote_instruction_enum_vote ||
     vote_instruction->discriminant==fd_vote_instruction_enum_vote_switch ||

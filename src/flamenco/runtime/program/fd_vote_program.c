@@ -1646,13 +1646,12 @@ fd_vote_program_execute( fd_exec_instr_ctx_t * ctx ) {
       vote_account_initialize_v2;
 
   uchar __attribute__((aligned(alignof(fd_vote_instruction_t)))) vote_instruction_mem[ FD_VOTE_INSTRUCTION_FOOTPRINT ];
-  fd_vote_instruction_t * instruction = (fd_vote_instruction_t *)vote_instruction_mem;
-  rc = fd_vote_instruction_deserialize(
-    instruction,
+  fd_vote_instruction_t * instruction = fd_vote_instruction_deserialize(
+    (fd_vote_instruction_t *)vote_instruction_mem,
     ctx->instr->data,
     fd_ulong_min( ctx->instr->data_sz, FD_TXN_MTU )
   );
-  if( FD_UNLIKELY( rc ) ) {
+  if( FD_UNLIKELY( !instruction ) ) {
     return FD_EXECUTOR_INSTR_ERR_INVALID_INSTR_DATA;
   }
 

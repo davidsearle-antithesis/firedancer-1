@@ -658,10 +658,10 @@ fd_vote_state_versioned_new( fd_vote_state_versioned_t * self,
   return self;
 }
 
-int
-fd_vote_state_versioned_deserialize( fd_vote_state_versioned_t * self,
-                                     uchar const *               payload,
-                                     ulong                       payload_sz ) {
+static int
+fd_vote_state_versioned_deserialize_inner( fd_vote_state_versioned_t * self,
+                                           uchar const *               payload,
+                                           ulong                       payload_sz ) {
   CHECK( self!=NULL );
   CHECK( payload!=NULL );
 
@@ -787,6 +787,14 @@ fd_vote_state_versioned_deserialize( fd_vote_state_versioned_t * self,
   }
 
   return 0;
+}
+
+fd_vote_state_versioned_t *
+fd_vote_state_versioned_deserialize( fd_vote_state_versioned_t * self,
+                                     uchar const *               payload,
+                                     ulong                       payload_sz ) {
+  CHECK_RET_NULL( !fd_vote_state_versioned_deserialize_inner( self, payload, payload_sz ) );
+  return self;
 }
 
 int
@@ -1205,10 +1213,10 @@ deser_vote_authorize_checked_with_seed( fd_vote_authorize_checked_with_seed_args
 /* Vote instruction -- top-level decoder                              */
 /**********************************************************************/
 
-int
-fd_vote_instruction_deserialize( fd_vote_instruction_t * instruction,
-                                 uchar const *           data,
-                                 ulong                   data_sz ) {
+static int
+fd_vote_instruction_deserialize_inner( fd_vote_instruction_t * instruction,
+                                       uchar const *           data,
+                                       ulong                   data_sz ) {
   fd_memset( instruction, 0, sizeof(fd_vote_instruction_t) );
 
   uchar const ** p  = &data;
@@ -1300,4 +1308,12 @@ fd_vote_instruction_deserialize( fd_vote_instruction_t * instruction,
     default:
       return 1;
   }
+}
+
+fd_vote_instruction_t *
+fd_vote_instruction_deserialize( fd_vote_instruction_t * instruction,
+                                 uchar const *           data,
+                                 ulong                   data_sz ) {
+  CHECK_RET_NULL( !fd_vote_instruction_deserialize_inner( instruction, data, data_sz ) );
+  return instruction;
 }

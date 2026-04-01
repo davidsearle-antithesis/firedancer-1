@@ -49,7 +49,7 @@ last_lockout( fd_vote_state_versioned_t * self ) {
 int
 fd_vsv_get_state( fd_account_meta_t const *   meta,
                   fd_vote_state_versioned_t * versioned ) {
-  if( FD_UNLIKELY( fd_vote_state_versioned_deserialize( versioned, fd_account_data( meta ), meta->dlen ) ) ) {
+  if( FD_UNLIKELY( !fd_vote_state_versioned_deserialize( versioned, fd_account_data( meta ), meta->dlen ) ) ) {
     return FD_EXECUTOR_INSTR_ERR_INVALID_ACC_DATA;
   }
 
