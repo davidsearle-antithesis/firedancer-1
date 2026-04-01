@@ -2468,8 +2468,8 @@ static void
 process_fec_complete( fd_replay_tile_t *    ctx,
                       fd_stem_context_t *   stem,
                       ulong                 sig,
-                      fd_shred_complete_t * complete_msg ) {
-  fd_shred_t const * shred = &complete_msg->last_shred;
+                      fd_fec_complete_t * complete_msg ) {
+  fd_shred_t const * shred = &complete_msg->last_shred_hdr;
 
   fd_hash_t const * merkle_root         = &complete_msg->merkle_root;
   fd_hash_t const * chained_merkle_root = &complete_msg->chained_merkle_root;

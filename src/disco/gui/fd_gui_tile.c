@@ -428,8 +428,8 @@ after_frag( fd_gui_ctx_t *      ctx,
         fd_gui_handle_shred( ctx->gui, slot, shred_idx, is_turbine, tsorig_nanos );
       }
       if( FD_UNLIKELY( sig==SHRED_SIG_FEC_COMPLETE_LEADER ) ) {
-        fd_shred_complete_t * complete_msg = (fd_shred_complete_t *)fd_type_pun( src );
-        fd_gui_handle_leader_fec( ctx->gui, complete_msg->last_shred.slot, FD_FEC_SHRED_CNT, complete_msg->last_shred.data.flags & FD_SHRED_DATA_FLAG_SLOT_COMPLETE, tsorig_nanos );
+        fd_fec_complete_t * complete_msg = (fd_fec_complete_t *)fd_type_pun( src );
+        fd_gui_handle_leader_fec( ctx->gui, complete_msg->last_shred_hdr.slot, FD_FEC_SHRED_CNT, complete_msg->last_shred_hdr.data.flags & FD_SHRED_DATA_FLAG_SLOT_COMPLETE, tsorig_nanos );
       }
       break;
     }

@@ -18,11 +18,12 @@ typedef struct {
   /* ... rest of the structure members ... */
 } fd_shred_shared_ctx_t;
 
-/* shred_out has 3 possible messsage types, but 7 different message sigs
+/* shred_out has 3 possible messsage types, but 8 different message sigs
    to differentiate betweeen different data sources.  All individual
-   shred messages SHRED_SIG_SRC_{TURBINE,LEADER,RECONSTRUCTED,REPAIR}
-   have the same dcache type fd_shred_base_t.  Only repair shreds will
-   populate the rnonce field.
+   shred messages
+   SHRED_SIG_SRC_{TURBINE,LEADER,RECONSTRUCTED,REPAIR,BAD_REPAIR} have
+   the same dcache type fd_shred_base_t.  Only repair/bad_repair shreds
+   will populate the rnonce field.
 
    SHRED_SIG_FEC_{EVICTED,COMPLETE,COMPLETE_LEADER} are not generated on
    every shred, but rather on events where a FEC set is completed by the
@@ -59,6 +60,9 @@ FD_STATIC_ASSERT( SHRED_SIG_RESULT_EQVOC     == FD_FEC_RESOLVER_SHRED_EQUIVOC,  
 
 static inline int  fd_shred_sig_res( ulong sig ) { return (int)(sig >> 32UL); }
 static inline uint fd_shred_sig_src( ulong sig ) { return (uint)sig; }
+
+/* For all individual shred messages:
+   SHRED_SIG_SRC_{TURBINE,LEADER,RECONSTRUCTED,REPAIR,BAD_REPAIR} */
 struct fd_shred_base {
   union {
     uchar        shred_[ FD_SHRED_MAX_SZ ];
@@ -69,23 +73,26 @@ struct fd_shred_base {
 };
 typedef struct fd_shred_base fd_shred_base_t;
 
-struct fd_shred_evicted {
+/* For the FEC evicted message: SHRED_SIG_FEC_EVICTED */
+struct fd_fec_evicted {
   ulong slot;
   uint  fec_set_idx;
 };
-typedef struct fd_shred_evicted fd_shred_evicted_t;
+typedef struct fd_fec_evicted fd_fec_evicted_t;
 
-struct fd_shred_complete {
-  fd_shred_t last_shred; /* last data shred in the FEC set */
+
+/* For an FEC complete message: SHRED_SIG_FEC_COMPLETE or SHRED_SIG_FEC_COMPLETE_LEADER */
+struct fd_fec_complete {
+  fd_shred_t last_shred_hdr; /* header of last data shred in the FEC set */
   fd_hash_t  merkle_root;
   fd_hash_t  chained_merkle_root;
 };
-typedef struct fd_shred_complete fd_shred_complete_t;
+typedef struct fd_fec_complete fd_fec_complete_t;
 
 union fd_shred_message {
-  fd_shred_base_t     shred;
-  fd_shred_evicted_t  evicted;
-  fd_shred_complete_t complete;
+  fd_shred_base_t   shred;
+  fd_fec_evicted_t  evicted;
+  fd_fec_complete_t complete;
 };
 typedef union fd_shred_message fd_shred_message_t;
 

@@ -310,13 +310,13 @@ after_credit( fd_backt_tile_t *   ctx,
      of the shred tile.  This involves copying the data shred header and
      appending the merkle root and chained merkle root. */
 
-  fd_shred_complete_t * complete_msg = (fd_shred_complete_t *)fd_type_pun( fd_chunk_to_laddr( ctx->repair_out->mem, ctx->repair_out->chunk ) );
-  complete_msg->last_shred = *shred;
+  fd_fec_complete_t * complete_msg = (fd_fec_complete_t *)fd_type_pun( fd_chunk_to_laddr( ctx->repair_out->mem, ctx->repair_out->chunk ) );
+  complete_msg->last_shred_hdr = *shred;
   memcpy( &complete_msg->merkle_root, &mr, sizeof(fd_hash_t) );
   memcpy( &complete_msg->chained_merkle_root, &cmr, sizeof(fd_hash_t) );
 
-  fd_stem_publish( stem, ctx->repair_out->idx, SHRED_SIG_FEC_COMPLETE, ctx->repair_out->chunk, sizeof(fd_shred_complete_t), 0, 0UL, fd_frag_meta_ts_comp( fd_tickcount() ) );
-  ctx->repair_out->chunk = fd_dcache_compact_next( ctx->repair_out->chunk, sizeof(fd_shred_complete_t), ctx->repair_out->chunk0, ctx->repair_out->wmark );
+  fd_stem_publish( stem, ctx->repair_out->idx, SHRED_SIG_FEC_COMPLETE, ctx->repair_out->chunk, sizeof(fd_fec_complete_t), 0, 0UL, fd_frag_meta_ts_comp( fd_tickcount() ) );
+  ctx->repair_out->chunk = fd_dcache_compact_next( ctx->repair_out->chunk, sizeof(fd_fec_complete_t), ctx->repair_out->chunk0, ctx->repair_out->wmark );
 
   if( FD_UNLIKELY( ctx->reading_slot>ctx->end_slot && !ctx->shreds_cnt ) ) ctx->publish_time += fd_log_wallclock();
 }

@@ -886,7 +886,7 @@ after_net( ctx_t * ctx,
 
 static inline void
 after_evict( ctx_t * ctx,
-             fd_shred_evicted_t * evicted ) {
+             fd_fec_evicted_t * evicted ) {
   fd_forest_fec_clear( ctx->forest, evicted->slot, evicted->fec_set_idx, FD_FEC_SHRED_CNT - 1 );
 }
 
@@ -973,7 +973,7 @@ after_frag( ctx_t *             ctx,
           Msgs 2 and 3 have a shred header in the dcache.  Msg 1 is empty. */
 
       if( FD_UNLIKELY( sig==SHRED_SIG_FEC_EVICTED ) ) {
-        fd_shred_evicted_t * evicted = (fd_shred_evicted_t *)fd_type_pun( fd_chunk_to_laddr( in_ctx->mem, ctx->chunk ) );
+        fd_fec_evicted_t * evicted = (fd_fec_evicted_t *)fd_type_pun( fd_chunk_to_laddr( in_ctx->mem, ctx->chunk ) );
         after_evict( ctx, evicted );
         return;
       }
@@ -1005,8 +1005,8 @@ after_frag( ctx_t *             ctx,
 
 
       if( FD_UNLIKELY( sig==SHRED_SIG_FEC_COMPLETE || sig==SHRED_SIG_FEC_COMPLETE_LEADER ) ) {
-        fd_shred_complete_t * complete_msg = (fd_shred_complete_t *)fd_type_pun( src );
-        after_fec( ctx, &complete_msg->last_shred, &complete_msg->merkle_root, &complete_msg->chained_merkle_root );
+        fd_fec_complete_t * complete_msg = (fd_fec_complete_t *)fd_type_pun( src );
+        after_fec( ctx, &complete_msg->last_shred_hdr, &complete_msg->merkle_root, &complete_msg->chained_merkle_root );
 
         /* forward along to replay */
         memcpy( fd_chunk_to_laddr( ctx->repair_out_ctx->mem, ctx->repair_out_ctx->chunk ), src, sz );
