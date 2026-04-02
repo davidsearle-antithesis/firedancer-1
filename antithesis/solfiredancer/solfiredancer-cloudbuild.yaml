@@ -1,0 +1,47 @@
+# =============================================================================
+# solfiredancer — Google Cloud Build config
+#
+# Builds on native x86_64 VMs and pushes to Artifact Registry.
+# No qemu emulation needed.
+#
+# Usage (from firedancer repo root):
+#   gcloud builds submit \
+#     --config antithesis/solfiredancer/solfiredancer-cloudbuild.yaml \
+#     --machine-type=e2-highcpu-32 \
+#     --timeout=3600s \
+#     --region=us-central1 \
+#     .
+# =============================================================================
+
+steps:
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'build'
+      - '--platform=linux/amd64'
+      - '-t'
+      - 'us-central1-docker.pkg.dev/molten-verve-216720/honey-pwhale-repository/solfiredancer-firedancer:latest'
+      - '-f'
+      - 'antithesis/solfiredancer/Dockerfile.firedancer'
+      - '.'
+    timeout: '3000s'
+
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'build'
+      - '--platform=linux/amd64'
+      - '-t'
+      - 'us-central1-docker.pkg.dev/molten-verve-216720/honey-pwhale-repository/solfiredancer-workload:latest'
+      - '-f'
+      - 'antithesis/solfiredancer/Dockerfile.workload'
+      - '.'
+    timeout: '600s'
+
+images:
+  - 'us-central1-docker.pkg.dev/molten-verve-216720/honey-pwhale-repository/solfiredancer-firedancer:latest'
+  - 'us-central1-docker.pkg.dev/molten-verve-216720/honey-pwhale-repository/solfiredancer-workload:latest'
+
+options:
+  machineType: 'E2_HIGHCPU_32'
+  diskSizeGb: 200
+
+timeout: '3600s'

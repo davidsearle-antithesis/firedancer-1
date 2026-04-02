@@ -1,0 +1,42 @@
+# =============================================================================
+# solfiredancer — Workload generator image for Antithesis testing
+# =============================================================================
+#
+# Build (amd64 only — Antithesis runs on amd64):
+#   podman build --arch amd64 \
+#     -t solfiredancer-workload:latest -f Dockerfile.workload ../..
+# =============================================================================
+
+FROM ubuntu:22.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        ca-certificates curl wget jq \
+        python3 python3-pip python3-venv \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Rust (needed for solders/solana-py build deps)
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
+    | sh -s -- -y --default-toolchain 1.79.0
+ENV PATH="/root/.cargo/bin:${PATH}"
+
+# Install Python Solana SDK
+# The workload only needs solana + solders for transfer transactions.
+# spl-token is not on PyPI as "spl-token" — the package is "solana-spl".
+# We skip it since the workload only does SOL transfers.
+RUN pip3 install --no-cache-dir \
+        solana==0.34.3 \
+        solders==0.21.0 \
+        requests \
+        numpy \
+        tqdm \
+        pqdm
+
+# Copy workload scripts
+COPY antithesis/solfiredancer/workload/ /workload/
+COPY antithesis/solfiredancer/solfiredancer-entrypoint-workload.sh /entrypoint-workload.sh
+
+RUN chmod +x /entrypoint-workload.sh /workload/*.py
+
+ENTRYPOINT ["/entrypoint-workload.sh"]

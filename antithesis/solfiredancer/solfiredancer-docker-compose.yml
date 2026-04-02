@@ -1,0 +1,243 @@
+# =============================================================================
+# solfiredancer — Antithesis docker-compose
+#
+# Topology:
+#   1 Agave bootstrap validator  (creates genesis, seeds gossip, serves RPC)
+#   7 Firedancer validators       (system under test)
+#   1 Workload generator          (transaction pressure)
+#
+# The bootstrap validator uses Agave so we have a known-good reference
+# implementation producing the genesis and initial blocks.  All Firedancer
+# validators join via gossip and must reach consensus independently.
+#
+# Usage:
+#   podman-compose -f solfiredancer-docker-compose.yml up
+# =============================================================================
+version: "3.8"
+
+# ---------------------------------------------------------------------------
+# Common Firedancer validator settings
+# ---------------------------------------------------------------------------
+x-fd-common: &fd-common
+  image: us-central1-docker.pkg.dev/molten-verve-216720/honey-pwhale-repository/solfiredancer-firedancer:latest
+  build:
+    context: ../..
+    dockerfile: antithesis/solfiredancer/Dockerfile.firedancer
+  privileged: true
+  ulimits:
+    memlock: -1
+    nofile:
+      soft: 1048576
+      hard: 1048576
+  sysctls:
+    net.core.rmem_max: "134217728"
+    net.core.wmem_max: "134217728"
+    net.core.rmem_default: "134217728"
+    net.core.wmem_default: "134217728"
+  volumes:
+    - shared-genesis:/genesis
+  environment: &fd-env
+    BOOTSTRAP_GOSSIP: "10.0.0.10:8001"
+    BOOTSTRAP_RPC: "http://10.0.0.10:8899"
+    SLOTS_PER_EPOCH: "200"
+    HASHES_PER_TICK: "1024"
+    TICKS_PER_SLOT: "64"
+    TARGET_TICK_DURATION_MICROS: "6250"
+    # Tile counts — sized for container workload, not bare-metal
+    VERIFY_TILE_COUNT: "4"
+    EXECLE_TILE_COUNT: "2"
+    EXECRP_TILE_COUNT: "4"
+    BANK_TILE_COUNT: "2"
+    SHRED_TILE_COUNT: "1"
+    NET_TILE_COUNT: "1"
+    QUIC_TILE_COUNT: "1"
+    RESOLV_TILE_COUNT: "1"
+    GOSSVF_TILE_COUNT: "1"
+    SIGN_TILE_COUNT: "2"
+    SNAPSHOT_HASH_TILE_COUNT: "2"
+    MAX_ACCOUNTS: "10000000"
+    FILE_SIZE_GIB: "8"
+
+services:
+  # =========================================================================
+  # Bootstrap validator (Agave)
+  # =========================================================================
+  solfiredancer-bootstrap:
+    image: us-central1-docker.pkg.dev/molten-verve-216720/honey-pwhale-repository/solfiredancer-firedancer:latest
+    build:
+      context: ../..
+      dockerfile: antithesis/solfiredancer/Dockerfile.firedancer
+    hostname: solfiredancer-bootstrap
+    container_name: solfiredancer-bootstrap
+    privileged: true
+    networks:
+      solfiredancer-net:
+        ipv4_address: 10.0.0.10
+    volumes:
+      - shared-genesis:/genesis
+    entrypoint: ["/entrypoint-bootstrap.sh"]
+    environment:
+      SLOTS_PER_EPOCH: "200"
+      HASHES_PER_TICK: "1024"
+      TICKS_PER_SLOT: "64"
+      BOOTSTRAP_STAKE_LAMPORTS: "11000000000000000"
+      BOOTSTRAP_VALIDATOR_LAMPORTS: "11000000000000000"
+      FAUCET_LAMPORTS: "1000000000000000000"
+      ENABLE_WARMUP_EPOCHS: "true"
+      GOSSIP_HOST: "10.0.0.10"
+
+  # =========================================================================
+  # Firedancer validators 1–7
+  # =========================================================================
+  solfiredancer-validator-1:
+    <<: *fd-common
+    hostname: solfiredancer-val-1
+    container_name: solfiredancer-validator-1
+    networks:
+      solfiredancer-net:
+        ipv4_address: 10.0.0.11
+    entrypoint: ["/entrypoint-validator.sh"]
+    environment:
+      <<: *fd-env
+      VALIDATOR_ID: "1"
+      STAKE_LAMPORTS: "1000000000000000"
+    depends_on:
+      - solfiredancer-bootstrap
+
+  solfiredancer-validator-2:
+    <<: *fd-common
+    hostname: solfiredancer-val-2
+    container_name: solfiredancer-validator-2
+    networks:
+      solfiredancer-net:
+        ipv4_address: 10.0.0.12
+    entrypoint: ["/entrypoint-validator.sh"]
+    environment:
+      <<: *fd-env
+      VALIDATOR_ID: "2"
+      STAKE_LAMPORTS: "1000000000000000"
+    depends_on:
+      - solfiredancer-bootstrap
+
+  solfiredancer-validator-3:
+    <<: *fd-common
+    hostname: solfiredancer-val-3
+    container_name: solfiredancer-validator-3
+    networks:
+      solfiredancer-net:
+        ipv4_address: 10.0.0.13
+    entrypoint: ["/entrypoint-validator.sh"]
+    environment:
+      <<: *fd-env
+      VALIDATOR_ID: "3"
+      STAKE_LAMPORTS: "1000000000000000"
+    depends_on:
+      - solfiredancer-bootstrap
+
+  solfiredancer-validator-4:
+    <<: *fd-common
+    hostname: solfiredancer-val-4
+    container_name: solfiredancer-validator-4
+    networks:
+      solfiredancer-net:
+        ipv4_address: 10.0.0.14
+    entrypoint: ["/entrypoint-validator.sh"]
+    environment:
+      <<: *fd-env
+      VALIDATOR_ID: "4"
+      STAKE_LAMPORTS: "1000000000000000"
+    depends_on:
+      - solfiredancer-bootstrap
+
+  solfiredancer-validator-5:
+    <<: *fd-common
+    hostname: solfiredancer-val-5
+    container_name: solfiredancer-validator-5
+    networks:
+      solfiredancer-net:
+        ipv4_address: 10.0.0.15
+    entrypoint: ["/entrypoint-validator.sh"]
+    environment:
+      <<: *fd-env
+      VALIDATOR_ID: "5"
+      STAKE_LAMPORTS: "1000000000000000"
+    depends_on:
+      - solfiredancer-bootstrap
+
+  solfiredancer-validator-6:
+    <<: *fd-common
+    hostname: solfiredancer-val-6
+    container_name: solfiredancer-validator-6
+    networks:
+      solfiredancer-net:
+        ipv4_address: 10.0.0.16
+    entrypoint: ["/entrypoint-validator.sh"]
+    environment:
+      <<: *fd-env
+      VALIDATOR_ID: "6"
+      STAKE_LAMPORTS: "1000000000000000"
+    depends_on:
+      - solfiredancer-bootstrap
+
+  solfiredancer-validator-7:
+    <<: *fd-common
+    hostname: solfiredancer-val-7
+    container_name: solfiredancer-validator-7
+    networks:
+      solfiredancer-net:
+        ipv4_address: 10.0.0.17
+    entrypoint: ["/entrypoint-validator.sh"]
+    environment:
+      <<: *fd-env
+      VALIDATOR_ID: "7"
+      STAKE_LAMPORTS: "1000000000000000"
+    depends_on:
+      - solfiredancer-bootstrap
+
+  # =========================================================================
+  # Workload generator
+  # =========================================================================
+  solfiredancer-workload:
+    image: us-central1-docker.pkg.dev/molten-verve-216720/honey-pwhale-repository/solfiredancer-workload:latest
+    build:
+      context: ../..
+      dockerfile: antithesis/solfiredancer/Dockerfile.workload
+    hostname: solfiredancer-workload
+    container_name: solfiredancer-workload
+    networks:
+      solfiredancer-net:
+        ipv4_address: 10.0.0.20
+    volumes:
+      - shared-genesis:/genesis
+    entrypoint: ["/entrypoint-workload.sh"]
+    environment:
+      BOOTSTRAP_RPC: "http://10.0.0.10:8899"
+      # RPC endpoints for all validators (bootstrap + 7 FD)
+      RPC_ENDPOINTS: "http://10.0.0.10:8899,http://10.0.0.11:8123,http://10.0.0.12:8123,http://10.0.0.13:8123,http://10.0.0.14:8123,http://10.0.0.15:8123,http://10.0.0.16:8123,http://10.0.0.17:8123"
+      # TPU endpoints for FD validators (UDP transaction ingress)
+      TPU_ENDPOINTS: "10.0.0.11:9010,10.0.0.12:9010,10.0.0.13:9010,10.0.0.14:9010,10.0.0.15:9010,10.0.0.16:9010,10.0.0.17:9010"
+      TARGET_TPS: "5000"
+      # Steady-state warmup before Antithesis fault injection
+      WARMUP_SECONDS: "120"
+      # Phase duration for each workload scenario
+      PHASE_DURATION_SECONDS: "120"
+    depends_on:
+      - solfiredancer-bootstrap
+      - solfiredancer-validator-1
+
+# =============================================================================
+# Network
+# =============================================================================
+networks:
+  solfiredancer-net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 10.0.0.0/24
+
+# =============================================================================
+# Volumes
+# =============================================================================
+volumes:
+  shared-genesis:
+    driver: local
