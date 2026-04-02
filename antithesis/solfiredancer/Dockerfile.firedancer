@@ -51,8 +51,6 @@ RUN git submodule update --init --recursive
 # Tell Rust crates to use system OpenSSL + protobuf instead of vendoring.
 # Vendored builds fail under qemu due to Make jobserver FD issues.
 ENV OPENSSL_NO_VENDOR=1
-ENV PROTOBUF_NO_VENDOR=1
-ENV PROTOC=/usr/bin/protoc
 
 # Step 1: Build Firedancer C code
 RUN MACHINE=linux_gcc_x86_64 make -j$(nproc) EXTRAS="debug"
